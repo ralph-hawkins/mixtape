@@ -20,8 +20,14 @@
   <p>Position – <span id="position">—</span></p>
   <p>Accuracy – <span id="accuracy">—</span></p>
   <p>Last update – <span id="updated">—</span></p>
+  <p>Updates – <span id="count">—</span></p>
 
   <script>
+    // Two bits of memory, so the page can report frequency:
+    // how many fixes have arrived, and the clock time of the latest one.
+    let updateCount = 0;
+    let lastFixAt = null;
+
     // When the Start button is tapped, start following our position.
     // watchPosition keeps reporting for as long as the page is open.
     document.getElementById("start").addEventListener("click", function () {
@@ -44,7 +50,11 @@
           document.getElementById("accuracy").textContent =
             Math.round(position.coords.accuracy) + " m";
 
-          document.getElementById("updated").textContent = "just now";
+          // Note the arrival: one more fix, at this moment.
+          // The ticker below turns lastFixAt into "n s ago".
+          updateCount = updateCount + 1;
+          lastFixAt = Date.now();
+          document.getElementById("count").textContent = updateCount;
         },
 
         // Runs if we don't — permission refused, no signal, etc.
@@ -58,6 +68,16 @@
         // phone). Costs more battery — the right trade for a trail.
         { enableHighAccuracy: true }
       );
+
+      // A once-a-second ticker: how stale is the latest fix?
+      // If the GPS goes quiet, this number climbs — and that's the
+      // page telling the truth instead of saying "just now" forever.
+      setInterval(function () {
+        if (lastFixAt !== null) {
+          const seconds = Math.round((Date.now() - lastFixAt) / 1000);
+          document.getElementById("updated").textContent = seconds + " s ago";
+        }
+      }, 1000);
     });
   </script>
 
