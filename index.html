@@ -24,35 +24,44 @@
   <p>Audio – <span id="audio-state">—</span></p>
   <p>Distance to target – <span id="distance">—</span></p>
 
-  <!-- The test track. No "controls" attribute, so it's invisible —
-       our own script decides when it plays. -->
-  <audio id="track" src="assets/audio/test-001.m4a"></audio>
+  <!-- The audio player. Invisible (no "controls" attribute) — our
+       script decides when it plays, and trail.js decides which file
+       it holds. -->
+  <audio id="track"></audio>
+
+  <!-- The trail definition — a separate file so curators only ever
+       need to touch that one. It must load before the engine below,
+       and scripts run in page order, so it comes first. -->
+  <script src="trail.js"></script>
 
   <script>
     // Two bits of memory, so the page can report frequency:
     // how many fixes have arrived, and the clock time of the latest one.
+    // First: did the trail actually arrive? If trail.js is missing or
+    // has a typo that breaks it, say so loudly and stop — a page that
+    // carries on without its trail just looks mysteriously dead.
+    if (typeof trail === "undefined") {
+      document.getElementById("audio-state").textContent =
+        "trail.js failed to load — check the file for typos";
+      document.getElementById("start").disabled = true;
+      throw new Error("trail.js missing or broken");
+    }
+
     let updateCount = 0;
     let lastFixAt = null;
 
-    // The target comes from the web address, not the code — e.g.
-    //   https://…/mixtape/?lat=51.50772&lon=-0.12794
-    // (that example is Trafalgar Square). Keeping coordinates in the
-    // address means none ever sit in this public file.
+    // The zone comes from trail.js. Anything in the web address
+    // overrides it (?lat=…&lon=…&radius=…) — private testing without
+    // editing the public file.
     const params = new URLSearchParams(location.search);
-    const haveTarget = params.has("lat") && params.has("lon");
     const target = {
-      latitude: Number(params.get("lat")),
-      longitude: Number(params.get("lon"))
+      latitude: Number(params.get("lat") || trail.lat),
+      longitude: Number(params.get("lon") || trail.lon)
     };
-    if (!haveTarget) {
-      document.getElementById("distance").textContent =
-        "no target — add ?lat=…&lon=… to the address";
-    }
+    const zoneRadius = Number(params.get("radius") || trail.radius);
 
-    // The zone: within this many metres of the target, sound plays.
-    // Tunable from the address (…&radius=25); otherwise 5 m — tight,
-    // on purpose, to find out what GPS on a real street can support.
-    const zoneRadius = Number(params.get("radius") || 5);
+    // The trail also decides which recording plays.
+    document.getElementById("track").src = trail.audio;
 
     // Whether we're currently inside the zone. The trigger fires on
     // the CHANGE of this answer — crossing the line is the event.
@@ -112,31 +121,28 @@
           document.getElementById("accuracy").textContent =
             Math.round(position.coords.accuracy) + " m";
 
-          // If we know where the target is, say how far away it is —
-          // and run the trigger.
-          if (haveTarget) {
-            const distance = distanceInMetres(position.coords, target);
-            document.getElementById("distance").textContent =
-              Math.round(distance) + " m";
+          // How far to the zone — and the trigger.
+          const distance = distanceInMetres(position.coords, target);
+          document.getElementById("distance").textContent =
+            Math.round(distance) + " m";
 
-            const nowInside = distance <= zoneRadius;
+          const nowInside = distance <= zoneRadius;
 
-            // Act only when the answer CHANGES. Just arrived: play.
-            if (nowInside && !insideZone) {
-              document.getElementById("track").play();
-              document.getElementById("audio-state").textContent =
-                "playing — inside zone";
-            }
-            // Just left: pause. (Not rewound — walking back in picks
-            // up where it left off. A design choice we can revisit.)
-            if (!nowInside && insideZone) {
-              document.getElementById("track").pause();
-              document.getElementById("audio-state").textContent =
-                "paused — left zone";
-            }
-
-            insideZone = nowInside;
+          // Act only when the answer CHANGES. Just arrived: play.
+          if (nowInside && !insideZone) {
+            document.getElementById("track").play();
+            document.getElementById("audio-state").textContent =
+              "playing — inside zone";
           }
+          // Just left: pause. (Not rewound — walking back in picks
+          // up where it left off. A design choice we can revisit.)
+          if (!nowInside && insideZone) {
+            document.getElementById("track").pause();
+            document.getElementById("audio-state").textContent =
+              "paused — left zone";
+          }
+
+          insideZone = nowInside;
 
           // Note the arrival: one more fix, at this moment.
           // The ticker below turns lastFixAt into "n s ago".
