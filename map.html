@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mixtape — trail map</title>
+
+  <!-- Leaflet, the map library: one stylesheet, one script, fetched
+       from a public code-hosting service (a "CDN") rather than our
+       repo. The version number is pinned so it can't change under us. -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    /* The map fills the whole window. Leaflet insists its container
+       has a real height — forget this and you get a blank page. */
+    html, body { height: 100%; margin: 0; }
+    #map { height: 100%; }
+  </style>
+</head>
+<body>
+
+  <!-- The box Leaflet draws the map into. -->
+  <div id="map"></div>
+
+  <script>
+    // Build a map in the box above. Centred on Trafalgar Square for
+    // now, zoom level 16 (about neighbourhood scale) — step 2 frames
+    // it around the actual trail instead.
+    const map = L.map("map").setView([51.50772, -0.12794], 16);
+
+    // The map imagery itself comes as square "tiles" from
+    // OpenStreetMap's servers, free to use — showing the credit line
+    // is the one condition.
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "&copy; OpenStreetMap contributors"
+    }).addTo(map);
+  </script>
+
+</body>
+</html>
