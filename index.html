@@ -22,6 +22,7 @@
   <p>Last update – <span id="updated">—</span></p>
   <p>Updates – <span id="count">—</span></p>
   <p>Audio – <span id="audio-state">—</span></p>
+  <p>Distance to target – <span id="distance">—</span></p>
 
   <!-- The test track. No "controls" attribute, so it's invisible —
        our own script decides when it plays. -->
@@ -32,6 +33,36 @@
     // how many fixes have arrived, and the clock time of the latest one.
     let updateCount = 0;
     let lastFixAt = null;
+
+    // The target comes from the web address, not the code — e.g.
+    //   https://…/mixtape/?lat=51.50772&lon=-0.12794
+    // (that example is Trafalgar Square). Keeping coordinates in the
+    // address means none ever sit in this public file.
+    const params = new URLSearchParams(location.search);
+    const haveTarget = params.has("lat") && params.has("lon");
+    const target = {
+      latitude: Number(params.get("lat")),
+      longitude: Number(params.get("lon"))
+    };
+    if (!haveTarget) {
+      document.getElementById("distance").textContent =
+        "no target — add ?lat=…&lon=… to the address";
+    }
+
+    // How far apart two points are, in metres. This treats the ground
+    // as flat, which is near-enough exact at trail scale (the error
+    // only matters over many kilometres).
+    function distanceInMetres(a, b) {
+      // A degree of latitude is about 111,320 m everywhere. A degree
+      // of longitude is that much at the equator and shrinks towards
+      // the poles — the cos() applies that squeeze for our latitude.
+      const north = (a.latitude - b.latitude) * 111320;
+      const east = (a.longitude - b.longitude) * 111320
+                   * Math.cos(a.latitude * Math.PI / 180);
+      // Those are two sides of a right angle; Pythagoras gives the
+      // straight-line distance.
+      return Math.sqrt(north * north + east * east);
+    }
 
     // When the Start button is tapped, start following our position.
     // watchPosition keeps reporting for as long as the page is open.
@@ -68,6 +99,12 @@
           // metres of the point above". Smaller is better.
           document.getElementById("accuracy").textContent =
             Math.round(position.coords.accuracy) + " m";
+
+          // If we know where the target is, say how far away it is.
+          if (haveTarget) {
+            document.getElementById("distance").textContent =
+              Math.round(distanceInMetres(position.coords, target)) + " m";
+          }
 
           // Note the arrival: one more fix, at this moment.
           // The ticker below turns lastFixAt into "n s ago".
