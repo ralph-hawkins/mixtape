@@ -20,23 +20,23 @@ const trail = {
 
     {
       // A name for the zone. Only people reading this file see it.
-      name: "Trafalgar Square",
+      name: "Priory park",
 
       // Where the zone is centred.
-      lat: 51.50772,
-      lon: -0.12794,
+      lat: 51.461620,
+      lon: 0.010941,
 
       // How close you must be, in metres, before the track plays.
-      radius: 25,
+      radius: 10,
 
       // The recording that plays there.
       audio: "assets/audio/test-001.m4a"
     },
 
     {
-      name: "St Martin-in-the-Fields",
-      lat: 51.50888,
-      lon: -0.12662,
+      name: "Priory Park (Stop D)",
+      lat: 51.461737,
+      lon: 0.009928,
       radius: 25,
       audio: "assets/audio/test-002.m4a"
     }
