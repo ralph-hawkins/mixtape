@@ -59,6 +59,11 @@
     let updateCount = 0;
     let lastFixAt = null;
 
+    // "You are here" on the map: a dot for the latest fix and a halo
+    // for its accuracy. Both created on the first fix.
+    let hereDot = null;
+    let hereHalo = null;
+
     // Set up each zone from the trail file: its own player, and its
     // own memory of whether we're currently standing inside it. The
     // trigger fires when that answer CHANGES — crossing the line is
@@ -138,6 +143,25 @@
           // metres of the point above". Smaller is better.
           document.getElementById("accuracy").textContent =
             Math.round(position.coords.accuracy) + " m";
+
+          // Draw ourselves — from the SAME fix that drives the
+          // numbers and the triggers, so map, read-outs and audio
+          // can never disagree about where we are.
+          const here = [position.coords.latitude, position.coords.longitude];
+          if (hereDot === null) {
+            // First fix: create dot and halo, and glance over once —
+            // after that the map never moves itself.
+            hereDot = L.circleMarker(here,
+              { radius: 6, color: "#c00", fillOpacity: 1 }).addTo(map);
+            hereHalo = L.circle(here,
+              { radius: position.coords.accuracy,
+                color: "#c00", weight: 1, fillOpacity: 0.05 }).addTo(map);
+            map.panTo(here);
+          } else {
+            hereDot.setLatLng(here);
+            hereHalo.setLatLng(here);
+            hereHalo.setRadius(position.coords.accuracy);
+          }
 
           // Check every zone against where we are now, remembering
           // the nearest for the read-out. Infinity means "further
