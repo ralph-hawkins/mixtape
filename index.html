@@ -102,6 +102,10 @@
       // How many times this zone's track has started from the top —
       // measured against the trail file's "plays" allowance.
       zone.playCount = 0;
+      // While a fade-out is under way, this holds the timer that
+      // will pause the track when the fade lands. Cancelled if the
+      // walker comes back first.
+      zone.fadeTimer = null;
       // When a track reaches its natural end, its circle goes quiet —
       // or grey, if that was the zone's last allowed play. (This is
       // also what dims a "finish" zone once its last play-through
@@ -233,9 +237,64 @@
       gain.linearRampToValueAtTime(1, now + seconds);
     }
 
+    // Bring the knob back to full from wherever it is right now —
+    // for a walker who returns during a fade-out, when the sound
+    // never actually stopped. Climbs over the zone's fadeIn
+    // seconds; with none, jumps straight back to full.
+    function fadeRecover(zone) {
+      const gain = zone.gainNode.gain;
+      const now = zone.gainNode.context.currentTime;
+      gain.cancelScheduledValues(now);
+      gain.setValueAtTime(gain.value, now);
+      const seconds =
+        (typeof zone.fadeIn === "number") ? zone.fadeIn : 0;
+      if (seconds <= 0) {
+        gain.setValueAtTime(1, now);
+      } else {
+        gain.linearRampToValueAtTime(1, now + seconds);
+      }
+    }
+
+    // Sink the knob to silence over the zone's fadeOut seconds,
+    // and only THEN pause — pausing at once would make the fade
+    // inaudible. The pending pause lives in zone.fadeTimer so a
+    // returning walker can cancel it.
+    function fadeDownAndPause(zone) {
+      const seconds =
+        (typeof zone.fadeOut === "number") ? zone.fadeOut : 0;
+      const gain = zone.gainNode.gain;
+      const now = zone.gainNode.context.currentTime;
+      gain.cancelScheduledValues(now);
+      gain.setValueAtTime(gain.value, now);
+      gain.linearRampToValueAtTime(0, now + seconds);
+      zone.fadeTimer = setTimeout(function () {
+        zone.fadeTimer = null;
+        // If the track ran out on its own mid-fade, the "ended"
+        // listener has already told the truth — nothing to do.
+        if (zone.player.ended) { return; }
+        zone.player.pause();
+        logEvent(zone.name + " faded out — paused");
+        paintZone(zone);
+        updateZoneCells(zone);
+      }, seconds * 1000);
+    }
+
     // A walker has just crossed INTO this zone. Decide whether that
     // means sound, and keep the log honest about the decision.
     function arriveAt(zone) {
+      // Back before a fade-out finished? The pause never happened —
+      // cancel it, turn the knob back up, and this is simply the
+      // same play carrying on.
+      if (zone.fadeTimer !== null) {
+        clearTimeout(zone.fadeTimer);
+        zone.fadeTimer = null;
+        fadeRecover(zone);
+        zone.player.loop = (zone.loop === true);
+        logEvent("entered " + zone.name +
+          " — back before the fade-out finished, coming back up");
+        paintZone(zone);
+        return;
+      }
       // Fresh start, or picking up a sound already under way? A
       // fresh start is the first ever play, or a play after the
       // track fully ended. Resuming a paused track and rejoining a
@@ -306,9 +365,24 @@
         return;
       }
 
-      // "stop" — and the safe default for a zone with no exit line:
-      // quiet straight away. (Not rewound — walking back in picks
-      // up where it left off. A design choice we can revisit.)
+      // "stop" — and the safe default for a zone with no exit line.
+      // (Not rewound — walking back in picks up where it left off.
+      // A design choice we can revisit.)
+      const fadeSeconds =
+        (typeof zone.fadeOut === "number") ? zone.fadeOut : 0;
+
+      // A fadeOut only means something if sound is actually coming
+      // out and the volume knob exists to turn.
+      if (wasAudible && fadeSeconds > 0 && zone.gainNode) {
+        logEvent("left " + zone.name + " — fading out over " +
+          fadeSeconds + " s");
+        fadeDownAndPause(zone);
+        // No repaint yet: the circle stays green until the fade
+        // lands and the sound truly stops.
+        return;
+      }
+
+      // Quiet straight away.
       zone.player.pause();
       logEvent("left " + zone.name + (wasAudible
         ? " — stopped" : " — was already quiet"));

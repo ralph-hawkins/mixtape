@@ -45,7 +45,12 @@ const trail = {
 
       // fadeIn: seconds for the sound to rise from silent to full
       // when it starts. 0 = starts at full volume straight away.
-      fadeIn: 0
+      fadeIn: 5,
+
+      // fadeOut: seconds for the sound to sink to silence after
+      // walking out of a "stop" zone. 0 = cuts off straight away.
+      // "finish" zones ignore this — they end naturally instead.
+      fadeOut: 5
     },
 
     {
@@ -57,7 +62,8 @@ const trail = {
       loop: false,
       exit: "stop",
       plays: "always",
-      fadeIn: 0
+      fadeIn: 0,
+      fadeOut: 10
     },
 
     {
@@ -69,7 +75,8 @@ const trail = {
       loop: true,
       exit: "finish",
       plays: 2,
-      fadeIn: 2
+      fadeIn: 10,
+      fadeOut: 0
     }
 
   ]
