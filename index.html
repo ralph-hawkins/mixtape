@@ -195,6 +195,12 @@
             // and light the circle up. Looping is switched back on
             // each arrival, because a "finish" exit switches it off.
             if (nowInside && !zone.inside) {
+              // If the track had already finished, wind it back to
+              // the start ourselves — some phones (iPhones included)
+              // won't replay an ended track from play() alone.
+              if (zone.player.ended) {
+                zone.player.currentTime = 0;
+              }
               zone.player.loop = (zone.loop === true);
               zone.player.play();
               zone.circle.setStyle({
