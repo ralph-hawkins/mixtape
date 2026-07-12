@@ -23,11 +23,22 @@
   <!-- The box Leaflet draws the map into. -->
   <div id="map"></div>
 
+  <!-- The same trail definition the engine uses — one source of
+       truth, two views of it. -->
+  <script src="trail.js"></script>
+
   <script>
-    // Build a map in the box above. Centred on Trafalgar Square for
-    // now, zoom level 16 (about neighbourhood scale) — step 2 frames
-    // it around the actual trail instead.
-    const map = L.map("map").setView([51.50772, -0.12794], 16);
+    // Same loud failure as the walker's page: a map with no trail
+    // should say why, not show an empty world.
+    if (typeof trail === "undefined") {
+      document.getElementById("map").textContent =
+        "trail.js failed to load — check the file for typos";
+      throw new Error("trail.js missing or broken");
+    }
+
+    // Build a map in the box above. No start view yet — we frame it
+    // around the trail once the zones are drawn, below.
+    const map = L.map("map");
 
     // The map imagery itself comes as square "tiles" from
     // OpenStreetMap's servers, free to use — showing the credit line
@@ -35,6 +46,23 @@
     L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: "&copy; OpenStreetMap contributors"
     }).addTo(map);
+
+    // Draw each zone as a circle, true to its radius in metres —
+    // Leaflet scales it with the zoom, so what you see is what the
+    // trigger uses. Tapping a circle shows the zone's name.
+    trail.zones.forEach(function (zone) {
+      L.circle([zone.lat, zone.lon], { radius: zone.radius })
+        .addTo(map)
+        .bindPopup(zone.name);
+    });
+
+    // Frame the view around the whole trail: collect every zone's
+    // centre, then fit the map to hold them all, with breathing room.
+    // (maxZoom stops a one-zone trail zooming in to doorstep level.)
+    const points = trail.zones.map(function (zone) {
+      return [zone.lat, zone.lon];
+    });
+    map.fitBounds(points, { padding: [40, 40], maxZoom: 17 });
   </script>
 
 </body>
