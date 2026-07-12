@@ -4,17 +4,31 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Mixtape</title>
+
+  <!-- Leaflet, the same map library map.html uses — pinned to the
+       same version. -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <style>
+    /* The map gets the top half of the window (1vh = 1% of the
+       window's height), read-outs live below it. */
+    #map { height: 50vh; }
+  </style>
 </head>
 <body>
 
-  <h1>Where am I?</h1>
+  <h1>Logging</h1>
 
   <!-- Safari only shares location after a real tap, and audio will need
        a tap on every mobile browser anyway. So the experience starts
        with a button — same as every trail will. -->
   <button id="start">Start</button>
 
-  <!-- Three read-outs. Each dash is a placeholder that JavaScript will
+  <!-- The map: the trail's circles, and (soon) you. -->
+  <div id="map"></div>
+
+  <!-- The read-outs. Each dash is a placeholder that JavaScript will
        replace later. The id on each span is the hook it will use to
        find the right one. -->
   <p>Position – <span id="position">—</span></p>
@@ -53,6 +67,22 @@
       zone.player = new Audio(zone.audio);
       zone.inside = false;
     });
+
+    // The map — same recipe as map.html: OpenStreetMap tiles, one
+    // true-radius circle per zone, view framed around the trail.
+    const map = L.map("map");
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "&copy; OpenStreetMap contributors"
+    }).addTo(map);
+    trail.zones.forEach(function (zone) {
+      L.circle([zone.lat, zone.lon], { radius: zone.radius })
+        .addTo(map)
+        .bindPopup(zone.name);
+    });
+    map.fitBounds(
+      trail.zones.map(function (zone) { return [zone.lat, zone.lon]; }),
+      { padding: [40, 40], maxZoom: 17 }
+    );
 
     // How far apart two points are, in metres. This treats the ground
     // as flat, which is near-enough exact at trail scale (the error
