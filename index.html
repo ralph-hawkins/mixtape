@@ -213,6 +213,26 @@
       zone.playsCell.textContent = playsLine(zone);
     }
 
+    // Turn a zone's volume knob: silent now, rising to full over
+    // the zone's fadeIn seconds. With no fadeIn — or if the fade
+    // plumbing failed and there is no knob — sound simply starts
+    // at full, the hard start we've always had.
+    function fadeUp(zone) {
+      if (!zone.gainNode) { return; }
+      const seconds =
+        (typeof zone.fadeIn === "number") ? zone.fadeIn : 0;
+      const gain = zone.gainNode.gain;
+      const now = zone.gainNode.context.currentTime;
+      // Forget any turn of the knob still scheduled from before.
+      gain.cancelScheduledValues(now);
+      if (seconds <= 0) {
+        gain.setValueAtTime(1, now);
+        return;
+      }
+      gain.setValueAtTime(0, now);
+      gain.linearRampToValueAtTime(1, now + seconds);
+    }
+
     // A walker has just crossed INTO this zone. Decide whether that
     // means sound, and keep the log honest about the decision.
     function arriveAt(zone) {
@@ -231,6 +251,15 @@
         return;
       }
 
+      // Was sound already coming out (a rejoined "finish" tail)?
+      // A silent zone gets its fade-in; a still-audible one must
+      // NOT be dipped to nothing mid-note. Checked before the
+      // rewind below, which would muddy the answer.
+      const wasAudible = (zoneState(zone) === "playing");
+      const fadeNote = (!wasAudible &&
+        typeof zone.fadeIn === "number" && zone.fadeIn > 0)
+          ? ", fading in over " + zone.fadeIn + " s" : "";
+
       // If the track had already finished, wind it back to the
       // start ourselves — some phones (iPhones included) won't
       // replay an ended track from play() alone.
@@ -241,15 +270,20 @@
       if (startingFresh) {
         zone.playCount = zone.playCount + 1;
         logEvent("entered " + zone.name +
-          " — playing (" + playsLine(zone) + ")");
+          " — playing (" + playsLine(zone) + ")" + fadeNote);
       } else {
         logEvent("entered " + zone.name +
-          " — carrying on where it left off");
+          " — carrying on where it left off" + fadeNote);
       }
 
       // Looping is switched back on each arrival, because a
       // "finish" exit switches it off.
       zone.player.loop = (zone.loop === true);
+      // Set the volume knob before pressing play, so a fading
+      // track truly starts from silence rather than blipping.
+      if (!wasAudible) {
+        fadeUp(zone);
+      }
       zone.player.play();
       paintZone(zone);
     }

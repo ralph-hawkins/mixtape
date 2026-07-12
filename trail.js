@@ -41,7 +41,11 @@ const trail = {
       //   3        = up to three plays, then the zone stays quiet
       // Returning mid-track doesn't use up a play — only a start
       // from the beginning counts.
-      plays: "always"
+      plays: "always",
+
+      // fadeIn: seconds for the sound to rise from silent to full
+      // when it starts. 0 = starts at full volume straight away.
+      fadeIn: 0
     },
 
     {
@@ -52,7 +56,8 @@ const trail = {
       audio: "assets/audio/test-002.m4a",
       loop: false,
       exit: "stop",
-      plays: "always"
+      plays: "always",
+      fadeIn: 0
     },
 
     {
@@ -63,7 +68,8 @@ const trail = {
       audio: "assets/audio/test-005.m4a",
       loop: true,
       exit: "finish",
-      plays: 2
+      plays: 2,
+      fadeIn: 2
     }
 
   ]
