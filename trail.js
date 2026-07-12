@@ -19,17 +19,10 @@ const trail = {
   zones: [
 
     {
-      // A name for the zone. Only people reading this file see it.
-      name: "Priory park",
-
-      // Where the zone is centred.
+      name: "Priory park - west",
       lat: 51.461620,
       lon: 0.010941,
-
-      // How close you must be, in metres, before the track plays.
-      radius: 10,
-
-      // The recording that plays there.
+      radius: 40,
       audio: "assets/audio/test-001.m4a"
     },
 
@@ -39,6 +32,14 @@ const trail = {
       lon: 0.009928,
       radius: 25,
       audio: "assets/audio/test-002.m4a"
+    },
+
+    {
+      name: "Priory Park - east",
+      lat: 51.461820,
+      lon: 0.012042,
+      radius: 10,
+      audio: "assets/audio/test-003.m4a"
     }
 
   ]
