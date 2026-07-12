@@ -31,7 +31,7 @@
        with a button — same as every trail will. -->
   <button id="start">Start</button>
 
-  <!-- The map: the trail's circles, and (soon) you. -->
+  <!-- The map: the trail's circles, and you. -->
   <div id="map"></div>
 
   <!-- The read-outs. Each dash is a placeholder that JavaScript will
@@ -99,8 +99,7 @@
       // also what dims a "finish" zone once its last play-through
       // ends, some time after the walker has left.)
       zone.player.addEventListener("ended", function () {
-        const colour = restingColour(zone);
-        zone.circle.setStyle({ color: colour, fillColor: colour });
+        paintZone(zone);
         logEvent(zone.name + " finished" +
           (playsSpent(zone) ? " — all plays used" : ""));
         updateZoneCells(zone);
@@ -134,10 +133,34 @@
              zone.playCount >= zone.plays;
     }
 
-    // The colour a circle rests at when its zone is not playing:
-    // grey if the zone has used up all its plays, otherwise blue.
-    function restingColour(zone) {
-      return playsSpent(zone) ? finishedColour : quietColour;
+    // The one answer to "what is this zone doing right now?".
+    // Everything that reports — circle colours, the zone table, the
+    // audio read-out — asks this, so they can never disagree.
+    //   "playing"          sound is coming out (a finish tail counts)
+    //   "finished"         all plays used; the zone is done
+    //   "paused mid-track" a stop-zone waiting for the walker back
+    //   "quiet"            not started, or ended with plays left
+    function zoneState(zone) {
+      if (!zone.player.paused && !zone.player.ended) {
+        return "playing";
+      }
+      if (playsSpent(zone)) {
+        return "finished";
+      }
+      if (zone.playCount > 0 && !zone.player.ended &&
+          zone.player.currentTime > 0) {
+        return "paused mid-track";
+      }
+      return "quiet";
+    }
+
+    // Paint a zone's circle to match its state.
+    function paintZone(zone) {
+      const state = zoneState(zone);
+      let colour = quietColour;
+      if (state === "playing") { colour = playingColour; }
+      if (state === "finished") { colour = finishedColour; }
+      zone.circle.setStyle({ color: colour, fillColor: colour });
     }
 
     // "play 1" or "play 1 of 2" — the same wording feeds the zone
@@ -176,19 +199,78 @@
 
     // Refresh a zone's state and plays cells. Distance is filled in
     // by the position handler — the only code that knows where we
-    // are. "paused mid-track" is a stop-zone waiting to resume.
+    // are.
     function updateZoneCells(zone) {
-      let state = "quiet";
-      if (!zone.player.paused && !zone.player.ended) {
-        state = "playing";
-      } else if (playsSpent(zone)) {
-        state = "finished";
-      } else if (zone.playCount > 0 && !zone.player.ended &&
-                 zone.player.currentTime > 0) {
-        state = "paused mid-track";
-      }
-      zone.stateCell.textContent = state;
+      zone.stateCell.textContent = zoneState(zone);
       zone.playsCell.textContent = playsLine(zone);
+    }
+
+    // A walker has just crossed INTO this zone. Decide whether that
+    // means sound, and keep the log honest about the decision.
+    function arriveAt(zone) {
+      // Fresh start, or picking up a sound already under way? A
+      // fresh start is the first ever play, or a play after the
+      // track fully ended. Resuming a paused track and rejoining a
+      // "finish" tail are neither — they don't spend a play.
+      const startingFresh =
+        (zone.playCount === 0 || zone.player.ended);
+
+      // A zone with a number for "plays" only gets that many fresh
+      // starts. Once spent, arriving plays nothing.
+      if (startingFresh && playsSpent(zone)) {
+        logEvent("entered " + zone.name +
+          " — no plays left, staying quiet");
+        return;
+      }
+
+      // If the track had already finished, wind it back to the
+      // start ourselves — some phones (iPhones included) won't
+      // replay an ended track from play() alone.
+      if (zone.player.ended) {
+        zone.player.currentTime = 0;
+      }
+
+      if (startingFresh) {
+        zone.playCount = zone.playCount + 1;
+        logEvent("entered " + zone.name +
+          " — playing (" + playsLine(zone) + ")");
+      } else {
+        logEvent("entered " + zone.name +
+          " — carrying on where it left off");
+      }
+
+      // Looping is switched back on each arrival, because a
+      // "finish" exit switches it off.
+      zone.player.loop = (zone.loop === true);
+      zone.player.play();
+      paintZone(zone);
+    }
+
+    // A walker has just crossed OUT of this zone. The zone's exit
+    // setting decides what happens to a sound caught mid-play.
+    function leaveFrom(zone) {
+      // Was anything audible at the moment of leaving? Only for the
+      // log — "stopped" when nothing was playing would send a
+      // debugger down the wrong path.
+      const wasAudible = (zoneState(zone) === "playing");
+
+      if (zone.exit === "finish") {
+        // Let the current play-through end naturally: switch
+        // looping off so it can't start again, touch nothing else.
+        // The circle stays lit until the "ended" listener dims it.
+        zone.player.loop = false;
+        logEvent("left " + zone.name + (wasAudible
+          ? " — letting it finish" : " — was already quiet"));
+        return;
+      }
+
+      // "stop" — and the safe default for a zone with no exit line:
+      // quiet straight away. (Not rewound — walking back in picks
+      // up where it left off. A design choice we can revisit.)
+      zone.player.pause();
+      logEvent("left " + zone.name + (wasAudible
+        ? " — stopped" : " — was already quiet"));
+      paintZone(zone);
     }
     map.fitBounds(
       trail.zones.map(function (zone) { return [zone.lat, zone.lon]; }),
@@ -280,78 +362,12 @@
             const distance = distanceInMetres(position.coords, zone);
             const nowInside = distance <= zone.radius;
 
-            // Act only when the answer CHANGES. Just arrived: play,
-            // and light the circle up. Looping is switched back on
-            // each arrival, because a "finish" exit switches it off.
-            if (nowInside && !zone.inside) {
-              // Fresh start, or picking up a sound already under way?
-              // A fresh start is the first ever play, or a play after
-              // the track has fully ended. Resuming a paused track
-              // and rejoining a "finish" tail are neither — they
-              // don't spend a play.
-              const startingFresh =
-                (zone.playCount === 0 || zone.player.ended);
-
-              // A zone with a number for "plays" only gets that many
-              // fresh starts. Once spent, arriving plays nothing.
-              if (startingFresh && playsSpent(zone)) {
-                logEvent("entered " + zone.name +
-                  " — no plays left, staying quiet");
-              } else {
-                // If the track had already finished, wind it back to
-                // the start ourselves — some phones (iPhones
-                // included) won't replay an ended track from play()
-                // alone.
-                if (zone.player.ended) {
-                  zone.player.currentTime = 0;
-                }
-                if (startingFresh) {
-                  zone.playCount = zone.playCount + 1;
-                  logEvent("entered " + zone.name +
-                    " — playing (" + playsLine(zone) + ")");
-                } else {
-                  logEvent("entered " + zone.name +
-                    " — carrying on where it left off");
-                }
-                zone.player.loop = (zone.loop === true);
-                zone.player.play();
-                zone.circle.setStyle({
-                  color: playingColour, fillColor: playingColour
-                });
-              }
-            }
-            // Just left. The zone's exit setting decides what happens
-            // to a sound caught mid-play.
-            if (!nowInside && zone.inside) {
-              // Was anything audible at the moment of leaving? Only
-              // for the log — "stopped" when nothing was playing
-              // would send a debugger down the wrong path.
-              const wasAudible =
-                !zone.player.paused && !zone.player.ended;
-
-              if (zone.exit === "finish") {
-                // Let the current play-through end naturally: switch
-                // looping off so it can't start again, touch nothing
-                // else. The circle stays lit until the "ended"
-                // listener above dims it.
-                zone.player.loop = false;
-                logEvent("left " + zone.name + (wasAudible
-                  ? " — letting it finish" : " — was already quiet"));
-              } else {
-                // "stop" — and the safe default for a zone with no
-                // exit line: quiet straight away. (Not rewound —
-                // walking back in picks up where it left off. A
-                // design choice we can revisit.) restingColour keeps
-                // a spent zone grey rather than repainting it blue.
-                zone.player.pause();
-                logEvent("left " + zone.name + (wasAudible
-                  ? " — stopped" : " — was already quiet"));
-                const colour = restingColour(zone);
-                zone.circle.setStyle({
-                  color: colour, fillColor: colour
-                });
-              }
-            }
+            // Act only when the answer CHANGES — crossing the line
+            // is the event. What arriving and leaving actually mean
+            // lives in arriveAt and leaveFrom, up with the other
+            // zone functions.
+            if (nowInside && !zone.inside) { arriveAt(zone); }
+            if (!nowInside && zone.inside) { leaveFrom(zone); }
             zone.inside = nowInside;
 
             // Keep the zone's row in the status table current: the
@@ -369,14 +385,11 @@
             nearest.name + ", " + Math.round(nearestDistance) + " m";
 
           // The audio read-out reports STATE, not events: rebuild the
-          // list of everything playing, fresh, on every fix. It asks
-          // the players themselves — not "which zones am I in", which
-          // stops being the same thing once a "finish" tail can play
-          // on after you've left, or a play-once track can end while
-          // you're still standing there.
+          // list of everything playing, fresh, on every fix — asking
+          // zoneState, the same answer the table and circles use.
           const playing = trail.zones
             .filter(function (zone) {
-              return !zone.player.paused && !zone.player.ended;
+              return zoneState(zone) === "playing";
             })
             .map(function (zone) { return zone.name; });
 
