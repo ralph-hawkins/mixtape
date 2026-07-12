@@ -22,12 +22,7 @@
   <p>Last update – <span id="updated">—</span></p>
   <p>Updates – <span id="count">—</span></p>
   <p>Audio – <span id="audio-state">—</span></p>
-  <p>Distance to target – <span id="distance">—</span></p>
-
-  <!-- The audio player. Invisible (no "controls" attribute) — our
-       script decides when it plays, and trail.js decides which file
-       it holds. -->
-  <audio id="track"></audio>
+  <p>Nearest zone – <span id="distance">—</span></p>
 
   <!-- The trail definition — a separate file so curators only ever
        need to touch that one. It must load before the engine below,
@@ -50,33 +45,25 @@
     let updateCount = 0;
     let lastFixAt = null;
 
-    // The zone comes from trail.js. Anything in the web address
-    // overrides it (?lat=…&lon=…&radius=…) — private testing without
-    // editing the public file.
-    const params = new URLSearchParams(location.search);
-    const target = {
-      latitude: Number(params.get("lat") || trail.lat),
-      longitude: Number(params.get("lon") || trail.lon)
-    };
-    const zoneRadius = Number(params.get("radius") || trail.radius);
-
-    // The trail also decides which recording plays.
-    document.getElementById("track").src = trail.audio;
-
-    // Whether we're currently inside the zone. The trigger fires on
-    // the CHANGE of this answer — crossing the line is the event.
-    let insideZone = false;
+    // Set up each zone from the trail file: its own player, and its
+    // own memory of whether we're currently standing inside it. The
+    // trigger fires when that answer CHANGES — crossing the line is
+    // the event.
+    trail.zones.forEach(function (zone) {
+      zone.player = new Audio(zone.audio);
+      zone.inside = false;
+    });
 
     // How far apart two points are, in metres. This treats the ground
     // as flat, which is near-enough exact at trail scale (the error
     // only matters over many kilometres).
-    function distanceInMetres(a, b) {
+    function distanceInMetres(here, zone) {
       // A degree of latitude is about 111,320 m everywhere. A degree
       // of longitude is that much at the equator and shrinks towards
       // the poles — the cos() applies that squeeze for our latitude.
-      const north = (a.latitude - b.latitude) * 111320;
-      const east = (a.longitude - b.longitude) * 111320
-                   * Math.cos(a.latitude * Math.PI / 180);
+      const north = (here.latitude - zone.lat) * 111320;
+      const east = (here.longitude - zone.lon) * 111320
+                   * Math.cos(here.latitude * Math.PI / 180);
       // Those are two sides of a right angle; Pythagoras gives the
       // straight-line distance.
       return Math.sqrt(north * north + east * east);
@@ -92,22 +79,23 @@
 
       document.getElementById("updated").textContent = "asking…";
 
-      // Unlock the audio. Mobile browsers only let a page start sound
-      // during a real tap — so we start it here, then pause it at
-      // once. The browser now considers this track "user-approved",
-      // and the zone, not a tap, decides when it really plays.
-      const track = document.getElementById("track");
-      track.play().then(
-        function () {
-          track.pause();
-          document.getElementById("audio-state").textContent =
-            "unlocked — waiting for zone";
-        },
-        function (error) {
-          document.getElementById("audio-state").textContent =
-            "failed: " + error.message;
-        }
-      );
+      // Unlock every zone's audio. Mobile browsers only let a page
+      // start sound during a real tap — so every track starts here,
+      // and is paused at once. All are now "user-approved": the
+      // zones, not taps, decide when each really plays.
+      trail.zones.forEach(function (zone) {
+        zone.player.play().then(
+          function () {
+            zone.player.pause();
+          },
+          function (error) {
+            document.getElementById("audio-state").textContent =
+              zone.name + " failed: " + error.message;
+          }
+        );
+      });
+      document.getElementById("audio-state").textContent =
+        "unlocked — waiting for a zone";
 
       navigator.geolocation.watchPosition(
 
@@ -121,28 +109,39 @@
           document.getElementById("accuracy").textContent =
             Math.round(position.coords.accuracy) + " m";
 
-          // How far to the zone — and the trigger.
-          const distance = distanceInMetres(position.coords, target);
+          // Check every zone against where we are now, remembering
+          // the nearest for the read-out. Infinity means "further
+          // than anything" — so the first zone always beats it.
+          let nearest = null;
+          let nearestDistance = Infinity;
+
+          trail.zones.forEach(function (zone) {
+            const distance = distanceInMetres(position.coords, zone);
+            const nowInside = distance <= zone.radius;
+
+            // Act only when the answer CHANGES. Just arrived: play.
+            if (nowInside && !zone.inside) {
+              zone.player.play();
+              document.getElementById("audio-state").textContent =
+                "playing — " + zone.name;
+            }
+            // Just left: pause. (Not rewound — walking back in picks
+            // up where it left off. A design choice we can revisit.)
+            if (!nowInside && zone.inside) {
+              zone.player.pause();
+              document.getElementById("audio-state").textContent =
+                "paused — left " + zone.name;
+            }
+            zone.inside = nowInside;
+
+            if (distance < nearestDistance) {
+              nearestDistance = distance;
+              nearest = zone;
+            }
+          });
+
           document.getElementById("distance").textContent =
-            Math.round(distance) + " m";
-
-          const nowInside = distance <= zoneRadius;
-
-          // Act only when the answer CHANGES. Just arrived: play.
-          if (nowInside && !insideZone) {
-            document.getElementById("track").play();
-            document.getElementById("audio-state").textContent =
-              "playing — inside zone";
-          }
-          // Just left: pause. (Not rewound — walking back in picks
-          // up where it left off. A design choice we can revisit.)
-          if (!nowInside && insideZone) {
-            document.getElementById("track").pause();
-            document.getElementById("audio-state").textContent =
-              "paused — left zone";
-          }
-
-          insideZone = nowInside;
+            nearest.name + ", " + Math.round(nearestDistance) + " m";
 
           // Note the arrival: one more fix, at this moment.
           // The ticker below turns lastFixAt into "n s ago".
