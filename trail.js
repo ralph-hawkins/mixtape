@@ -23,23 +23,37 @@ const trail = {
       lat: 51.461620,
       lon: 0.010941,
       radius: 40,
-      audio: "assets/audio/test-001.m4a"
+      audio: "assets/audio/test-001.m4a",
+
+      // loop: should the track repeat for as long as someone stands
+      // in the zone? true = repeat, false = play once then go quiet.
+      loop: false,
+
+      // exit: what happens if they walk out mid-sound.
+      //   "stop"   = go quiet straight away
+      //   "finish" = let the current play-through end naturally
+      // Note the quote marks — both values need them.
+      exit: "stop"
     },
 
     {
       name: "Priory Park (Stop D)",
       lat: 51.461737,
       lon: 0.009928,
-      radius: 25,
-      audio: "assets/audio/test-002.m4a"
+      radius: 20,
+      audio: "assets/audio/test-002.m4a",
+      loop: false,
+      exit: "stop"
     },
 
     {
       name: "Priory Park - east",
       lat: 51.461820,
       lon: 0.012042,
-      radius: 10,
-      audio: "assets/audio/test-003.m4a"
+      radius: 50,
+      audio: "assets/audio/test-005.m4a",
+      loop: true,
+      exit: "finish"
     }
 
   ]

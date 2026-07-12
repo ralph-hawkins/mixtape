@@ -70,7 +70,18 @@
     // the event.
     trail.zones.forEach(function (zone) {
       zone.player = new Audio(zone.audio);
+      // Looping is the trail file's choice. "=== true" means a zone
+      // that forgets the loop line just plays once — the safe default.
+      zone.player.loop = (zone.loop === true);
       zone.inside = false;
+      // When a track reaches its natural end, its circle goes quiet.
+      // (This is also what dims a "finish" zone once its last
+      // play-through ends, some time after the walker has left.)
+      zone.player.addEventListener("ended", function () {
+        zone.circle.setStyle({
+          color: quietColour, fillColor: quietColour
+        });
+      });
     });
 
     // The map — same recipe as map.html: OpenStreetMap tiles, one
@@ -181,21 +192,34 @@
             const nowInside = distance <= zone.radius;
 
             // Act only when the answer CHANGES. Just arrived: play,
-            // and light the circle up.
+            // and light the circle up. Looping is switched back on
+            // each arrival, because a "finish" exit switches it off.
             if (nowInside && !zone.inside) {
+              zone.player.loop = (zone.loop === true);
               zone.player.play();
               zone.circle.setStyle({
                 color: playingColour, fillColor: playingColour
               });
             }
-            // Just left: pause, back to quiet blue. (Not rewound —
-            // walking back in picks up where it left off. A design
-            // choice we can revisit.)
+            // Just left. The zone's exit setting decides what happens
+            // to a sound caught mid-play.
             if (!nowInside && zone.inside) {
-              zone.player.pause();
-              zone.circle.setStyle({
-                color: quietColour, fillColor: quietColour
-              });
+              if (zone.exit === "finish") {
+                // Let the current play-through end naturally: switch
+                // looping off so it can't start again, touch nothing
+                // else. The circle stays lit until the "ended"
+                // listener above dims it.
+                zone.player.loop = false;
+              } else {
+                // "stop" — and the safe default for a zone with no
+                // exit line: quiet straight away. (Not rewound —
+                // walking back in picks up where it left off. A
+                // design choice we can revisit.)
+                zone.player.pause();
+                zone.circle.setStyle({
+                  color: quietColour, fillColor: quietColour
+                });
+              }
             }
             zone.inside = nowInside;
 
@@ -209,10 +233,15 @@
             nearest.name + ", " + Math.round(nearestDistance) + " m";
 
           // The audio read-out reports STATE, not events: rebuild the
-          // list of everything playing, fresh, on every fix. filter
-          // keeps the zones we're inside; map collects their names.
+          // list of everything playing, fresh, on every fix. It asks
+          // the players themselves — not "which zones am I in", which
+          // stops being the same thing once a "finish" tail can play
+          // on after you've left, or a play-once track can end while
+          // you're still standing there.
           const playing = trail.zones
-            .filter(function (zone) { return zone.inside; })
+            .filter(function (zone) {
+              return !zone.player.paused && !zone.player.ended;
+            })
             .map(function (zone) { return zone.name; });
 
           let audioLine = "quiet";
