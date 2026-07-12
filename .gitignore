@@ -2,3 +2,6 @@
 # just the site itself.
 .claude/
 CLAUDE.md
+
+# Finder metadata — never useful in a repo.
+.DS_Store
