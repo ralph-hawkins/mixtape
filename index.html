@@ -21,6 +21,11 @@
   <p>Accuracy – <span id="accuracy">—</span></p>
   <p>Last update – <span id="updated">—</span></p>
   <p>Updates – <span id="count">—</span></p>
+  <p>Audio – <span id="audio-state">—</span></p>
+
+  <!-- The test track. No "controls" attribute, so it's invisible —
+       our own script decides when it plays. -->
+  <audio id="track" src="assets/audio/test-001.m4a"></audio>
 
   <script>
     // Two bits of memory, so the page can report frequency:
@@ -37,6 +42,20 @@
       document.getElementById("start").disabled = true;
 
       document.getElementById("updated").textContent = "asking…";
+
+      // Start the audio. This is only allowed because we're inside a
+      // real tap — the same mobile rule as location. Like
+      // getCurrentPosition, play() answers later, so we hand it two
+      // functions: one for success, one for failure.
+      document.getElementById("track").play().then(
+        function () {
+          document.getElementById("audio-state").textContent = "playing";
+        },
+        function (error) {
+          document.getElementById("audio-state").textContent =
+            "failed: " + error.message;
+        }
+      );
 
       navigator.geolocation.watchPosition(
 
