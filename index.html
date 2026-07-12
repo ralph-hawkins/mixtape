@@ -79,11 +79,18 @@
     L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
       attribution: "&copy; OpenStreetMap contributors"
     }).addTo(map);
+    // Each zone keeps hold of its own circle — same trick as its
+    // player — so the trigger can restyle it later.
     trail.zones.forEach(function (zone) {
-      L.circle([zone.lat, zone.lon], { radius: zone.radius })
+      zone.circle = L.circle([zone.lat, zone.lon], { radius: zone.radius })
         .addTo(map)
         .bindPopup(zone.name);
     });
+
+    // Circle colours: Leaflet's usual blue when quiet, green while
+    // the zone's track is playing.
+    const quietColour = "#3388ff";
+    const playingColour = "#2a7f2a";
     map.fitBounds(
       trail.zones.map(function (zone) { return [zone.lat, zone.lon]; }),
       { padding: [40, 40], maxZoom: 17 }
@@ -173,16 +180,24 @@
             const distance = distanceInMetres(position.coords, zone);
             const nowInside = distance <= zone.radius;
 
-            // Act only when the answer CHANGES. Just arrived: play.
+            // Act only when the answer CHANGES. Just arrived: play,
+            // and light the circle up.
             if (nowInside && !zone.inside) {
               zone.player.play();
+              zone.circle.setStyle({
+                color: playingColour, fillColor: playingColour
+              });
               document.getElementById("audio-state").textContent =
                 "playing — " + zone.name;
             }
-            // Just left: pause. (Not rewound — walking back in picks
-            // up where it left off. A design choice we can revisit.)
+            // Just left: pause, back to quiet blue. (Not rewound —
+            // walking back in picks up where it left off. A design
+            // choice we can revisit.)
             if (!nowInside && zone.inside) {
               zone.player.pause();
+              zone.circle.setStyle({
+                color: quietColour, fillColor: quietColour
+              });
               document.getElementById("audio-state").textContent =
                 "paused — left " + zone.name;
             }
