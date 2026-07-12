@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mixtape</title>
+</head>
+<body>
+
+  <h1>Where am I?</h1>
+
+  <!-- Safari only shares location after a real tap, and audio will need
+       a tap on every mobile browser anyway. So the experience starts
+       with a button — same as every trail will. -->
+  <button id="start">Start</button>
+
+  <!-- Three read-outs. Each dash is a placeholder that JavaScript will
+       replace later. The id on each span is the hook it will use to
+       find the right one. -->
+  <p>Position – <span id="position">—</span></p>
+  <p>Accuracy – <span id="accuracy">—</span></p>
+  <p>Last update – <span id="updated">—</span></p>
+
+  <script>
+    // When the Start button is tapped, ask the browser for our position
+    // — once. Live updating comes in a later step.
+    document.getElementById("start").addEventListener("click", function () {
+
+      document.getElementById("updated").textContent = "asking…";
+
+      navigator.geolocation.getCurrentPosition(
+
+        // Runs if we get a position.
+        function (position) {
+          document.getElementById("position").textContent =
+            position.coords.latitude + ", " + position.coords.longitude;
+
+          // Accuracy is a radius in metres: "you are within this many
+          // metres of the point above". Smaller is better.
+          document.getElementById("accuracy").textContent =
+            Math.round(position.coords.accuracy) + " m";
+
+          document.getElementById("updated").textContent = "just now";
+        },
+
+        // Runs if we don't — permission refused, no signal, etc.
+        // Showing the reason on the page is the diagnostic bit.
+        function (error) {
+          document.getElementById("updated").textContent =
+            "failed: " + error.message;
+        }
+      );
+    });
+  </script>
+
+</body>
+</html>

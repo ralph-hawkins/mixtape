@@ -1,0 +1,4 @@
+# Claude-related files stay on this machine only — the public repo is
+# just the site itself.
+.claude/
+CLAUDE.md
