@@ -43,6 +43,10 @@
   <p>Updates – <span id="count">—</span></p>
   <p>Audio – <span id="audio-state">—</span></p>
   <p>Nearest zone – <span id="distance">—</span></p>
+  <!-- When GitHub Pages published the copy of the page you are
+       looking at. If this is older than your last push, you're
+       testing yesterday's code — refresh. -->
+  <p>Page published – <span id="published">—</span></p>
 
   <!-- Per-zone status: one row per zone, kept current by the
        engine. Answers "what's happening right now?" -->
@@ -75,6 +79,13 @@
 
     let updateCount = 0;
     let lastFixAt = null;
+
+    // When was this copy of the page published? The browser keeps
+    // the timestamp GitHub Pages stamped on the page at deploy —
+    // a cached stale copy shows its own old time, which is exactly
+    // the lie this read-out is here to catch.
+    document.getElementById("published").textContent =
+      new Date(document.lastModified).toLocaleString();
 
     // "You are here" on the map: a dot for the latest fix and a halo
     // for its accuracy. Both created on the first fix.
