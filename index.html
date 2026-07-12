@@ -292,6 +292,46 @@
       return Math.sqrt(north * north + east * east);
     }
 
+    // Fade plumbing. iPhones ignore volume changes made directly on
+    // an audio element, so fading needs the Web Audio API: each
+    // player's sound is routed through its own gain node — a volume
+    // knob the engine can turn smoothly. This step only builds the
+    // route and leaves every knob at full, proving sound survives
+    // the rewiring before any fading logic exists. Browsers only
+    // allow this after a real tap, so it runs inside Start.
+    function routeThroughGains() {
+      let audioContext;
+      try {
+        audioContext =
+          new (window.AudioContext || window.webkitAudioContext)();
+      } catch (error) {
+        // No Web Audio at all: sound still plays the direct way,
+        // fades just won't be possible. Say so and carry on.
+        logEvent("no Web Audio in this browser — fades unavailable");
+        return;
+      }
+      // A suspended context is the browser saying "not until a
+      // tap" — we are inside the tap, so wake it.
+      audioContext.resume();
+      trail.zones.forEach(function (zone) {
+        try {
+          const source =
+            audioContext.createMediaElementSource(zone.player);
+          zone.gainNode = audioContext.createGain();
+          zone.gainNode.gain.value = 1;
+          source.connect(zone.gainNode);
+          zone.gainNode.connect(audioContext.destination);
+        } catch (error) {
+          // This zone keeps playing the direct way; the log names
+          // it so silence has a suspect.
+          logEvent(zone.name + " fade plumbing failed: " +
+            error.message);
+        }
+      });
+      logEvent("fade plumbing in place — every track routed " +
+        "through its own volume knob, all at full");
+    }
+
     // When the Start button is tapped, start following our position.
     // watchPosition keeps reporting for as long as the page is open.
     document.getElementById("start").addEventListener("click", function () {
@@ -301,6 +341,11 @@
       document.getElementById("start").disabled = true;
 
       document.getElementById("updated").textContent = "asking…";
+
+      // Rewire the audio for fades while we're inside the tap —
+      // before the unlock below, so even that first silent
+      // play-and-pause travels the new route.
+      routeThroughGains();
 
       // Unlock every zone's audio. Mobile browsers only let a page
       // start sound during a real tap — so every track starts here,
