@@ -33,7 +33,15 @@ const trail = {
       //   "stop"   = go quiet straight away
       //   "finish" = let the current play-through end naturally
       // Note the quote marks — both values need them.
-      exit: "stop"
+      exit: "stop",
+
+      // plays: how many times the track may start from the top.
+      //   "always" = starts again on every return, no limit
+      //   1        = plays once, ever
+      //   3        = up to three plays, then the zone stays quiet
+      // Returning mid-track doesn't use up a play — only a start
+      // from the beginning counts.
+      plays: "always"
     },
 
     {
@@ -43,7 +51,8 @@ const trail = {
       radius: 20,
       audio: "assets/audio/test-002.m4a",
       loop: false,
-      exit: "stop"
+      exit: "stop",
+      plays: "always"
     },
 
     {
@@ -53,7 +62,8 @@ const trail = {
       radius: 50,
       audio: "assets/audio/test-005.m4a",
       loop: true,
-      exit: "finish"
+      exit: "finish",
+      plays: 2
     }
 
   ]

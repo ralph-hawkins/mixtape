@@ -74,6 +74,9 @@
       // that forgets the loop line just plays once — the safe default.
       zone.player.loop = (zone.loop === true);
       zone.inside = false;
+      // How many times this zone's track has started from the top —
+      // measured against the trail file's "plays" allowance.
+      zone.playCount = 0;
       // When a track reaches its natural end, its circle goes quiet.
       // (This is also what dims a "finish" zone once its last
       // play-through ends, some time after the walker has left.)
@@ -195,17 +198,37 @@
             // and light the circle up. Looping is switched back on
             // each arrival, because a "finish" exit switches it off.
             if (nowInside && !zone.inside) {
-              // If the track had already finished, wind it back to
-              // the start ourselves — some phones (iPhones included)
-              // won't replay an ended track from play() alone.
-              if (zone.player.ended) {
-                zone.player.currentTime = 0;
+              // Fresh start, or picking up a sound already under way?
+              // A fresh start is the first ever play, or a play after
+              // the track has fully ended. Resuming a paused track
+              // and rejoining a "finish" tail are neither — they
+              // don't spend a play.
+              const startingFresh =
+                (zone.playCount === 0 || zone.player.ended);
+
+              // A zone with a number for "plays" only gets that many
+              // fresh starts. Once spent, arriving does nothing.
+              const playsSpent =
+                typeof zone.plays === "number" &&
+                zone.playCount >= zone.plays;
+
+              if (!(startingFresh && playsSpent)) {
+                // If the track had already finished, wind it back to
+                // the start ourselves — some phones (iPhones
+                // included) won't replay an ended track from play()
+                // alone.
+                if (zone.player.ended) {
+                  zone.player.currentTime = 0;
+                }
+                if (startingFresh) {
+                  zone.playCount = zone.playCount + 1;
+                }
+                zone.player.loop = (zone.loop === true);
+                zone.player.play();
+                zone.circle.setStyle({
+                  color: playingColour, fillColor: playingColour
+                });
               }
-              zone.player.loop = (zone.loop === true);
-              zone.player.play();
-              zone.circle.setStyle({
-                color: playingColour, fillColor: playingColour
-              });
             }
             // Just left. The zone's exit setting decides what happens
             // to a sound caught mid-play.
