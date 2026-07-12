@@ -22,13 +22,17 @@
   <p>Last update – <span id="updated">—</span></p>
 
   <script>
-    // When the Start button is tapped, ask the browser for our position
-    // — once. Live updating comes in a later step.
+    // When the Start button is tapped, start following our position.
+    // watchPosition keeps reporting for as long as the page is open.
     document.getElementById("start").addEventListener("click", function () {
+
+      // One watch is enough — a second tap would start a second one,
+      // so switch the button off once it's done its job.
+      document.getElementById("start").disabled = true;
 
       document.getElementById("updated").textContent = "asking…";
 
-      navigator.geolocation.getCurrentPosition(
+      navigator.geolocation.watchPosition(
 
         // Runs if we get a position.
         function (position) {
@@ -48,7 +52,11 @@
         function (error) {
           document.getElementById("updated").textContent =
             "failed: " + error.message;
-        }
+        },
+
+        // Ask for the best fix the device can give (real GPS on a
+        // phone). Costs more battery — the right trade for a trail.
+        { enableHighAccuracy: true }
       );
     });
   </script>
