@@ -187,8 +187,6 @@
               zone.circle.setStyle({
                 color: playingColour, fillColor: playingColour
               });
-              document.getElementById("audio-state").textContent =
-                "playing — " + zone.name;
             }
             // Just left: pause, back to quiet blue. (Not rewound —
             // walking back in picks up where it left off. A design
@@ -198,8 +196,6 @@
               zone.circle.setStyle({
                 color: quietColour, fillColor: quietColour
               });
-              document.getElementById("audio-state").textContent =
-                "paused — left " + zone.name;
             }
             zone.inside = nowInside;
 
@@ -211,6 +207,19 @@
 
           document.getElementById("distance").textContent =
             nearest.name + ", " + Math.round(nearestDistance) + " m";
+
+          // The audio read-out reports STATE, not events: rebuild the
+          // list of everything playing, fresh, on every fix. filter
+          // keeps the zones we're inside; map collects their names.
+          const playing = trail.zones
+            .filter(function (zone) { return zone.inside; })
+            .map(function (zone) { return zone.name; });
+
+          let audioLine = "quiet";
+          if (playing.length > 0) {
+            audioLine = "playing — " + playing.join(", ");
+          }
+          document.getElementById("audio-state").textContent = audioLine;
 
           // Note the arrival: one more fix, at this moment.
           // The ticker below turns lastFixAt into "n s ago".
