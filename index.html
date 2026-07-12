@@ -14,6 +14,12 @@
     /* The map gets the top half of the window (1vh = 1% of the
        window's height), read-outs live below it. */
     #map { height: 50vh; }
+
+    /* The per-zone status table: a little air between columns. */
+    #zones td { padding-right: 1em; }
+
+    /* The event log: plain lines, no bullets, slightly smaller. */
+    #log { list-style: none; padding-left: 0; font-size: 0.9em; }
   </style>
 </head>
 <body>
@@ -37,6 +43,17 @@
   <p>Updates – <span id="count">—</span></p>
   <p>Audio – <span id="audio-state">—</span></p>
   <p>Nearest zone – <span id="distance">—</span></p>
+
+  <!-- Per-zone status: one row per zone, kept current by the
+       engine. Answers "what's happening right now?" -->
+  <h2>Zones</h2>
+  <table id="zones"></table>
+
+  <!-- The event log: a line appears whenever something happens,
+       newest at the top. Answers "what just happened?" — useful
+       when the moment has already passed. -->
+  <h2>Log</h2>
+  <ul id="log"></ul>
 
   <!-- The trail definition — a separate file so curators only ever
        need to touch that one. It must load before the engine below,
@@ -77,13 +94,16 @@
       // How many times this zone's track has started from the top —
       // measured against the trail file's "plays" allowance.
       zone.playCount = 0;
-      // When a track reaches its natural end, its circle goes quiet.
-      // (This is also what dims a "finish" zone once its last
-      // play-through ends, some time after the walker has left.)
+      // When a track reaches its natural end, its circle goes quiet —
+      // or grey, if that was the zone's last allowed play. (This is
+      // also what dims a "finish" zone once its last play-through
+      // ends, some time after the walker has left.)
       zone.player.addEventListener("ended", function () {
-        zone.circle.setStyle({
-          color: quietColour, fillColor: quietColour
-        });
+        const colour = restingColour(zone);
+        zone.circle.setStyle({ color: colour, fillColor: colour });
+        logEvent(zone.name + " finished" +
+          (playsSpent(zone) ? " — all plays used" : ""));
+        updateZoneCells(zone);
       });
     });
 
@@ -102,9 +122,74 @@
     });
 
     // Circle colours: Leaflet's usual blue when quiet, green while
-    // the zone's track is playing.
+    // the zone's track is playing, grey once a zone has used up all
+    // its plays — visibly done rather than mysteriously silent.
     const quietColour = "#3388ff";
     const playingColour = "#2a7f2a";
+    const finishedColour = "#888888";
+
+    // Has this zone used up its allowance of fresh starts?
+    function playsSpent(zone) {
+      return typeof zone.plays === "number" &&
+             zone.playCount >= zone.plays;
+    }
+
+    // The colour a circle rests at when its zone is not playing:
+    // grey if the zone has used up all its plays, otherwise blue.
+    function restingColour(zone) {
+      return playsSpent(zone) ? finishedColour : quietColour;
+    }
+
+    // "play 1" or "play 1 of 2" — the same wording feeds the zone
+    // table and the log, so they can never disagree.
+    function playsLine(zone) {
+      if (typeof zone.plays === "number") {
+        return "play " + zone.playCount + " of " + zone.plays;
+      }
+      return "play " + zone.playCount;
+    }
+
+    // Write one line to the event log, stamped with the clock time,
+    // newest at the top — in the field you read the top line, not
+    // scroll to the bottom.
+    const logList = document.getElementById("log");
+    function logEvent(message) {
+      const line = document.createElement("li");
+      line.textContent =
+        new Date().toLocaleTimeString() + " — " + message;
+      logList.prepend(line);
+    }
+
+    // The per-zone status table: one row per zone, built once from
+    // the trail file. Each zone keeps hold of its own cells — the
+    // same trick as its player and its circle.
+    const zonesTable = document.getElementById("zones");
+    trail.zones.forEach(function (zone) {
+      const row = zonesTable.insertRow();
+      row.insertCell().textContent = zone.name;
+      zone.distanceCell = row.insertCell();
+      zone.stateCell = row.insertCell();
+      zone.playsCell = row.insertCell();
+      zone.distanceCell.textContent = "—";
+      updateZoneCells(zone);
+    });
+
+    // Refresh a zone's state and plays cells. Distance is filled in
+    // by the position handler — the only code that knows where we
+    // are. "paused mid-track" is a stop-zone waiting to resume.
+    function updateZoneCells(zone) {
+      let state = "quiet";
+      if (!zone.player.paused && !zone.player.ended) {
+        state = "playing";
+      } else if (playsSpent(zone)) {
+        state = "finished";
+      } else if (zone.playCount > 0 && !zone.player.ended &&
+                 zone.player.currentTime > 0) {
+        state = "paused mid-track";
+      }
+      zone.stateCell.textContent = state;
+      zone.playsCell.textContent = playsLine(zone);
+    }
     map.fitBounds(
       trail.zones.map(function (zone) { return [zone.lat, zone.lon]; }),
       { padding: [40, 40], maxZoom: 17 }
@@ -152,6 +237,7 @@
       });
       document.getElementById("audio-state").textContent =
         "unlocked — waiting for a zone";
+      logEvent("started — audio unlocked, waiting for a position");
 
       navigator.geolocation.watchPosition(
 
@@ -207,12 +293,11 @@
                 (zone.playCount === 0 || zone.player.ended);
 
               // A zone with a number for "plays" only gets that many
-              // fresh starts. Once spent, arriving does nothing.
-              const playsSpent =
-                typeof zone.plays === "number" &&
-                zone.playCount >= zone.plays;
-
-              if (!(startingFresh && playsSpent)) {
+              // fresh starts. Once spent, arriving plays nothing.
+              if (startingFresh && playsSpent(zone)) {
+                logEvent("entered " + zone.name +
+                  " — no plays left, staying quiet");
+              } else {
                 // If the track had already finished, wind it back to
                 // the start ourselves — some phones (iPhones
                 // included) won't replay an ended track from play()
@@ -222,6 +307,11 @@
                 }
                 if (startingFresh) {
                   zone.playCount = zone.playCount + 1;
+                  logEvent("entered " + zone.name +
+                    " — playing (" + playsLine(zone) + ")");
+                } else {
+                  logEvent("entered " + zone.name +
+                    " — carrying on where it left off");
                 }
                 zone.player.loop = (zone.loop === true);
                 zone.player.play();
@@ -233,24 +323,41 @@
             // Just left. The zone's exit setting decides what happens
             // to a sound caught mid-play.
             if (!nowInside && zone.inside) {
+              // Was anything audible at the moment of leaving? Only
+              // for the log — "stopped" when nothing was playing
+              // would send a debugger down the wrong path.
+              const wasAudible =
+                !zone.player.paused && !zone.player.ended;
+
               if (zone.exit === "finish") {
                 // Let the current play-through end naturally: switch
                 // looping off so it can't start again, touch nothing
                 // else. The circle stays lit until the "ended"
                 // listener above dims it.
                 zone.player.loop = false;
+                logEvent("left " + zone.name + (wasAudible
+                  ? " — letting it finish" : " — was already quiet"));
               } else {
                 // "stop" — and the safe default for a zone with no
                 // exit line: quiet straight away. (Not rewound —
                 // walking back in picks up where it left off. A
-                // design choice we can revisit.)
+                // design choice we can revisit.) restingColour keeps
+                // a spent zone grey rather than repainting it blue.
                 zone.player.pause();
+                logEvent("left " + zone.name + (wasAudible
+                  ? " — stopped" : " — was already quiet"));
+                const colour = restingColour(zone);
                 zone.circle.setStyle({
-                  color: quietColour, fillColor: quietColour
+                  color: colour, fillColor: colour
                 });
               }
             }
             zone.inside = nowInside;
+
+            // Keep the zone's row in the status table current: the
+            // distance from this fix, and the state right now.
+            zone.distanceCell.textContent = Math.round(distance) + " m";
+            updateZoneCells(zone);
 
             if (distance < nearestDistance) {
               nearestDistance = distance;
@@ -291,6 +398,7 @@
         function (error) {
           document.getElementById("updated").textContent =
             "failed: " + error.message;
+          logEvent("position failed: " + error.message);
         },
 
         // Ask for the best fix the device can give (real GPS on a
