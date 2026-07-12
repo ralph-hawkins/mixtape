@@ -49,6 +49,15 @@
         "no target — add ?lat=…&lon=… to the address";
     }
 
+    // The zone: within this many metres of the target, sound plays.
+    // Tunable from the address (…&radius=25); otherwise 5 m — tight,
+    // on purpose, to find out what GPS on a real street can support.
+    const zoneRadius = Number(params.get("radius") || 5);
+
+    // Whether we're currently inside the zone. The trigger fires on
+    // the CHANGE of this answer — crossing the line is the event.
+    let insideZone = false;
+
     // How far apart two points are, in metres. This treats the ground
     // as flat, which is near-enough exact at trail scale (the error
     // only matters over many kilometres).
@@ -74,13 +83,16 @@
 
       document.getElementById("updated").textContent = "asking…";
 
-      // Start the audio. This is only allowed because we're inside a
-      // real tap — the same mobile rule as location. Like
-      // getCurrentPosition, play() answers later, so we hand it two
-      // functions: one for success, one for failure.
-      document.getElementById("track").play().then(
+      // Unlock the audio. Mobile browsers only let a page start sound
+      // during a real tap — so we start it here, then pause it at
+      // once. The browser now considers this track "user-approved",
+      // and the zone, not a tap, decides when it really plays.
+      const track = document.getElementById("track");
+      track.play().then(
         function () {
-          document.getElementById("audio-state").textContent = "playing";
+          track.pause();
+          document.getElementById("audio-state").textContent =
+            "unlocked — waiting for zone";
         },
         function (error) {
           document.getElementById("audio-state").textContent =
@@ -100,10 +112,30 @@
           document.getElementById("accuracy").textContent =
             Math.round(position.coords.accuracy) + " m";
 
-          // If we know where the target is, say how far away it is.
+          // If we know where the target is, say how far away it is —
+          // and run the trigger.
           if (haveTarget) {
+            const distance = distanceInMetres(position.coords, target);
             document.getElementById("distance").textContent =
-              Math.round(distanceInMetres(position.coords, target)) + " m";
+              Math.round(distance) + " m";
+
+            const nowInside = distance <= zoneRadius;
+
+            // Act only when the answer CHANGES. Just arrived: play.
+            if (nowInside && !insideZone) {
+              document.getElementById("track").play();
+              document.getElementById("audio-state").textContent =
+                "playing — inside zone";
+            }
+            // Just left: pause. (Not rewound — walking back in picks
+            // up where it left off. A design choice we can revisit.)
+            if (!nowInside && insideZone) {
+              document.getElementById("track").pause();
+              document.getElementById("audio-state").textContent =
+                "paused — left zone";
+            }
+
+            insideZone = nowInside;
           }
 
           // Note the arrival: one more fix, at this moment.
