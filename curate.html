@@ -73,6 +73,10 @@
 
   <div id="result" hidden></div>
 
+  <!-- Shown weeks before the key behind the tool runs out, on saves
+       that worked. Nothing to do with whether this upload succeeded. -->
+  <div class="setup" id="warning" hidden></div>
+
   <h2 id="addedHeading" hidden>Added just now</h2>
   <ul id="added"></ul>
 
@@ -201,6 +205,15 @@
           file.name + " was already there. It will be on the trail in " +
           "about a minute."
         : "Added. It will be on the trail in about a minute.", "good");
+
+      // The service warns when the key behind it is running out. It
+      // says so on a save that WORKED, weeks ahead, so there is time
+      // to fix it before anyone is locked out.
+      if (answer.warning) {
+        const notice = document.getElementById("warning");
+        notice.hidden = false;
+        notice.textContent = answer.warning;
+      }
 
       document.getElementById("addedHeading").hidden = false;
       const line = document.createElement("li");

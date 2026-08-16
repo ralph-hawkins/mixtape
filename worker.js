@@ -37,6 +37,23 @@ const ALLOWED_ORIGINS = [
 // Nothing bigger than this goes up. A voice memo is about 1 MB.
 const MAX_BYTES = 15 * 1024 * 1024;
 
+// When GITHUB_TOKEN stops working.
+//
+// *** CHANGE THIS DATE WHENEVER THE TOKEN IS RENEWED. ***
+//
+// Fine-grained tokens expire, and on the day it does, saving stops for
+// every curator with no explanation anyone will remember. GitHub has a
+// response header meant for exactly this, but for fine-grained tokens
+// it returns the current time rather than the expiry date — a known
+// bug — so the date cannot be discovered and has to be written here.
+//
+// Made 16 August 2026, three months.
+const KEY_EXPIRES = "2026-11-16";
+
+// How far ahead to start saying so. Long enough that a one-day-a-week
+// project still gets two or three chances to act on it.
+const WARN_DAYS_BEFORE = 21;
+
 // The only two places in the repo this key can ever write.
 //
 // This is the most important rule in the file. Without it the password
@@ -285,7 +302,10 @@ async function putFile(path, base64, message, sha, extra, env, cors) {
     return reply(200, Object.assign({
       ok: true,
       path: path,
-      message: message
+      message: message,
+      // Carried back on a SUCCESSFUL save on purpose. A warning that
+      // only appears once things break is not a warning.
+      warning: keyExpiryWarning() || undefined
     }, extra || {}), cors);
   }
   if (put.status === 401 || put.status === 403) {
@@ -304,6 +324,36 @@ async function putFile(path, base64, message, sha, extra, env, cors) {
     error: "GitHub refused that (" + put.status + ")." +
            (detail ? " It said: " + detail : "")
   }, cors);
+}
+
+// Say the key is running out, before it does — while saving still
+// works and there is time to do something about it. Returns nothing at
+// all until the date is close, so it is silent for months and then
+// impossible to miss.
+function keyExpiryWarning() {
+  // Counted in whole calendar days, not in hours. Measuring the gap
+  // directly would report "0 days" from lunchtime the day before,
+  // which reads as though it has already gone.
+  const dayMs = 86400000;
+  const daysLeft = Math.floor(Date.parse(KEY_EXPIRES + "T00:00:00Z") / dayMs)
+                 - Math.floor(Date.now() / dayMs);
+
+  if (daysLeft > WARN_DAYS_BEFORE) {
+    return null;
+  }
+  if (daysLeft < 0) {
+    return "That saved, but the key behind this tool expired on " +
+           KEY_EXPIRES + " and will stop working at any moment. " +
+           "Please tell Ralph.";
+  }
+  if (daysLeft === 0) {
+    return "Please tell Ralph today: the key behind this tool runs out " +
+           "at the end of today (" + KEY_EXPIRES + "). Saving will stop " +
+           "working after that.";
+  }
+  return "Please tell Ralph: the key behind this tool runs out in " +
+         daysLeft + " day" + (daysLeft === 1 ? "" : "s") + ", on " +
+         KEY_EXPIRES + ". Saving will stop working then.";
 }
 
 // The expiry trap, said plainly. A fine-grained token stops working on
