@@ -18,7 +18,13 @@ const Curate = (function () {
   // Bumped when the shape of what is stored changes, so a copy left
   // over from an older version of the tool is ignored rather than
   // misread.
-  const WORKING = "mixtape-working-copy-3";
+  const WORKING = "mixtape-working-copy-4";
+
+  // Kept in localStorage, not sessionStorage, so half-finished work
+  // survives closing the tab or the browser. That is also what lets the
+  // "leave site?" warning go: there is nothing to lose by leaving, so
+  // there is nothing to interrupt anyone about.
+  const store = window.localStorage;
 
   // -------------------------------------------------------------------
   // Who is using it
@@ -47,12 +53,12 @@ const Curate = (function () {
   // The working copy
   // -------------------------------------------------------------------
   function working() {
-    try { return JSON.parse(sessionStorage.getItem(WORKING)); }
+    try { return JSON.parse(store.getItem(WORKING)); }
     catch (error) { return null; }
   }
 
   function putWorking(copy) {
-    sessionStorage.setItem(WORKING, JSON.stringify(copy));
+    store.setItem(WORKING, JSON.stringify(copy));
   }
 
   // Deliberately NOT called `trails`. trail.js declares a global of
@@ -120,7 +126,7 @@ const Curate = (function () {
 
   // Throw the working copy away, so the next page starts from whatever
   // is really in the repository.
-  function discard() { sessionStorage.removeItem(WORKING); }
+  function discard() { store.removeItem(WORKING); }
 
   // -------------------------------------------------------------------
   // Getting started on any page
@@ -131,8 +137,39 @@ const Curate = (function () {
   // -------------------------------------------------------------------
   function start(ready, failed) {
     if (needsSignIn()) { return; }
-    if (working()) { showUnsavedBanner(); ready(); return; }
 
+    const copy = working();
+
+    // Unsaved work is kept whatever the file says now. Saving will
+    // notice if somebody else has been editing in the meantime.
+    if (copy && changed()) { showUnsavedBanner(); ready(); return; }
+
+    // A copy with nothing unsaved in it has nothing worth keeping, and
+    // it now outlives the tab — so check it is still the current trail
+    // rather than showing one somebody else has since changed.
+    if (copy) {
+      currentVersion(function (sha) {
+        if (sha && sha === copy.baseSha) { ready(); return; }
+        discard();
+        loadFresh(ready, failed);
+      });
+      return;
+    }
+
+    loadFresh(ready, failed);
+  }
+
+  // Which version of trail.js the repository is holding. Public, so
+  // this needs no password.
+  function currentVersion(ready) {
+    fetch("https://api.github.com/repos/" + REPO + "/contents/trail.js" +
+        "?ref=main", { cache: "no-store" })
+      .then(function (response) { return response.ok ? response.json() : null; })
+      .then(function (info) { ready(info ? info.sha : null); })
+      .catch(function () { ready(null); });
+  }
+
+  function loadFresh(ready, failed) {
     let loadedTrails = null;
     let sha = null;
     let waiting = 2;
@@ -173,17 +210,11 @@ const Curate = (function () {
     };
     document.head.appendChild(script);
 
-    // Which version that is. The repository is public, so this needs
-    // no password.
-    fetch("https://api.github.com/repos/" + REPO + "/contents/trail.js" +
-        "?ref=main", { cache: "no-store" })
-      .then(function (response) { return response.ok ? response.json() : null; })
-      .then(function (info) {
-        if (!info) { giveUp("Could not check the trail version."); return; }
-        sha = info.sha;
-        done();
-      })
-      .catch(function () { giveUp("Could not reach GitHub."); });
+    currentVersion(function (found) {
+      if (!found) { giveUp("Could not check the trail version."); return; }
+      sha = found;
+      done();
+    });
   }
 
   // -------------------------------------------------------------------
@@ -237,7 +268,10 @@ const Curate = (function () {
         }
         // Saved, so this copy is now clean — and the version it is
         // based on has moved on.
-        refreshVersion(function () {
+        // The file has moved on, so remember which version it is now.
+        currentVersion(function (sha) {
+          const held = working();
+          if (held && sha) { held.baseSha = sha; putWorking(held); }
           // What was just saved is now what the file says, so there is
           // nothing left to save until something else changes.
           const fresh = working();
@@ -256,17 +290,6 @@ const Curate = (function () {
       });
   }
 
-  function refreshVersion(ready) {
-    fetch("https://api.github.com/repos/" + REPO + "/contents/trail.js" +
-        "?ref=main", { cache: "no-store" })
-      .then(function (response) { return response.ok ? response.json() : null; })
-      .then(function (info) {
-        const copy = working();
-        if (info && copy) { copy.baseSha = info.sha; putWorking(copy); }
-        ready();
-      })
-      .catch(ready);
-  }
 
   // -------------------------------------------------------------------
   // A quiet strip at the top of every page while work is unsaved, so
@@ -306,9 +329,15 @@ const Curate = (function () {
     document.body.insertBefore(strip, document.body.firstChild);
   }
 
-  window.addEventListener("beforeunload", function (event) {
-    if (changed()) { event.preventDefault(); event.returnValue = ""; }
-  });
+  // There is deliberately no "leave site?" warning.
+  //
+  // The tool is several pages, so the browser fires that on every step
+  // between them — four questions to add one zone, and every Back. A
+  // warning that appears constantly gets dismissed without reading,
+  // which makes it worse than none at all. The strip above does the
+  // job instead: it is on every page, it names what is unsaved, and it
+  // can be acted on. And because the work now outlives the tab, there
+  // is nothing to lose by closing it.
 
   // Running from a copy on your own machine is useful — no waiting for
   // the site to rebuild — but it is only the PAGES that are local. The

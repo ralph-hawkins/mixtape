@@ -405,9 +405,12 @@ section("Knowing whether there is anything to save");
     insertBefore() {}, addEventListener() {} });
   globalThis.localStorage = shelf();
   globalThis.sessionStorage = shelf();
+  // The working copy lives in localStorage now, so it outlives
+  // the tab and there is nothing to warn about on the way out.
+  globalThis.window = { addEventListener() {}, localStorage: null };
   globalThis.document = { getElementById: () => null,
     createElement: nothing, body: nothing() };
-  globalThis.window = { addEventListener() {} };
+  globalThis.window.localStorage = globalThis.localStorage;
   // curate.js checks where it is being served from as it loads, to warn
   // when the pages are local but saving is not.
   globalThis.location = { hostname: "ralph-hawkins.github.io",
@@ -420,7 +423,7 @@ section("Knowing whether there is anything to save");
   const zone = { name: "West", lat: 51.4, lon: 0.01, radius: 40,
     audio: "assets/audio/a.m4a" };
   const loaded = { park: { name: "The Park", zones: [zone] } };
-  sessionStorage.setItem("mixtape-working-copy-3", JSON.stringify(
+  localStorage.setItem("mixtape-working-copy-4", JSON.stringify(
     { baseSha: "abc", trails: JSON.parse(JSON.stringify(loaded)),
       original: JSON.parse(JSON.stringify(loaded)) }));
 
