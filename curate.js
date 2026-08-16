@@ -18,7 +18,7 @@ const Curate = (function () {
   // Bumped when the shape of what is stored changes, so a copy left
   // over from an older version of the tool is ignored rather than
   // misread.
-  const WORKING = "mixtape-working-copy-2";
+  const WORKING = "mixtape-working-copy-3";
 
   // -------------------------------------------------------------------
   // Who is using it
@@ -76,16 +76,46 @@ const Curate = (function () {
   // Is there anything to save?
   //
   // Worked out by asking what would actually be written and comparing
-  // it with what was loaded — NOT by a flag set whenever something
-  // edits the trail. A flag is wrong twice over: opening a question and
+  // it with what arrived — NOT by a flag set whenever something edits
+  // the trail. A flag is wrong twice over: opening a question and
   // confirming the same answer would set it, and once set nothing could
-  // clear it, so the tool nagged about unsaved work that did not exist.
-  // This way an edit that changes nothing is not a change, and adding a
-  // zone then removing it again leaves no trace.
+  // clear it. This way an edit that changes nothing is not a change,
+  // and adding a zone then removing it again leaves no trace.
   function changed() {
     const copy = working();
-    if (!copy || typeof copy.asLoaded !== "string") { return false; }
-    return trailsToFile(copy.trails) !== copy.asLoaded;
+    if (!copy || !copy.original) { return false; }
+    return trailsToFile(copy.trails) !== trailsToFile(copy.original);
+  }
+
+  // Which trails are different, by name, so the warning can say what it
+  // is talking about. A warning nobody can look into is just nagging.
+  function whatChanged() {
+    const copy = working();
+    if (!copy || !copy.original) { return []; }
+    const named = [];
+    const ids = new Set(Object.keys(copy.trails)
+      .concat(Object.keys(copy.original)));
+    ids.forEach(function (id) {
+      const before = copy.original[id];
+      const after = copy.trails[id];
+      if (!before) { named.push((after.name || id) + " (new)"); return; }
+      if (!after) { named.push((before.name || id) + " (removed)"); return; }
+      if (trailsToFile({ x: after }) !== trailsToFile({ x: before })) {
+        named.push(after.name || id);
+      }
+    });
+    return named;
+  }
+
+  // Put everything back the way it arrived. Faster and safer than
+  // throwing the whole working copy away, which would mean fetching it
+  // all again and could fail with no connection.
+  function revert() {
+    const copy = working();
+    if (!copy || !copy.original) { return; }
+    copy.trails = JSON.parse(JSON.stringify(copy.original));
+    putWorking(copy);
+    showUnsavedBanner();
   }
 
   // Throw the working copy away, so the next page starts from whatever
@@ -111,9 +141,10 @@ const Curate = (function () {
     function done() {
       waiting = waiting - 1;
       if (waiting > 0 || broken) { return; }
-      // Keep what the file said when it arrived, to compare against.
+      // Keep the trail exactly as it arrived, to compare against and
+      // to put back if somebody changes their mind.
       putWorking({ baseSha: sha, trails: loadedTrails,
-        asLoaded: trailsToFile(loadedTrails) });
+        original: JSON.parse(JSON.stringify(loadedTrails)) });
       ready();
     }
     function giveUp(message) {
@@ -211,7 +242,8 @@ const Curate = (function () {
           // nothing left to save until something else changes.
           const fresh = working();
           if (fresh) {
-            fresh.asLoaded = trailsToFile(fresh.trails);
+            // What was just saved is now what the file says.
+            fresh.original = JSON.parse(JSON.stringify(fresh.trails));
             putWorking(fresh);
           }
           showUnsavedBanner();
@@ -244,10 +276,33 @@ const Curate = (function () {
     const there = document.getElementById("unsavedBanner");
     if (!changed()) { if (there) { there.remove(); } return; }
     if (there) { return; }
+    const named = whatChanged();
     const strip = document.createElement("div");
     strip.id = "unsavedBanner";
     strip.className = "unsaved";
-    strip.textContent = "You have changes that are not saved yet.";
+
+    const says = document.createElement("span");
+    says.textContent = named.length
+      ? "Unsaved changes to " + named.join(", ") + ". "
+      : "You have changes that are not saved yet. ";
+    strip.appendChild(says);
+
+    // A way out. Being told there is unsaved work with no way to see
+    // what it is or get rid of it is worse than not being told.
+    const undo = document.createElement("a");
+    undo.href = "#";
+    undo.textContent = "Discard them";
+    undo.addEventListener("click", function (event) {
+      event.preventDefault();
+      const sure = window.confirm(
+        "Put everything back the way it was when you opened the tool?\n\n" +
+        "Anything you have changed since then will be lost.");
+      if (!sure) { return; }
+      revert();
+      location.reload();
+    });
+    strip.appendChild(undo);
+
     document.body.insertBefore(strip, document.body.firstChild);
   }
 
@@ -286,7 +341,7 @@ const Curate = (function () {
   }
 
   return { who, password, signIn, signedIn, needsSignIn,
-           start, trails: allTrails, update, changed,
+           start, trails: allTrails, update, changed, whatChanged, revert,
            discard, working, sounds, save, ask, go, showProblems,
            showUnsavedBanner };
 })();

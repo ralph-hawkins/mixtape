@@ -396,9 +396,13 @@ section("Knowing whether there is anything to save");
              setItem: (k, v) => kept.set(k, String(v)),
              removeItem: (k) => kept.delete(k) };
   };
+  // Just enough of an element for curate.js to build its banner
+  // against. Anything it reaches for and does not find would throw, so
+  // this doubles as a check that the banner code stays simple.
   const nothing = () => ({ id: "", className: "", textContent: "",
-    hidden: false, firstChild: null, appendChild() {}, remove() {},
-    setAttribute() {}, scrollIntoView() {}, insertBefore() {} });
+    href: "", hidden: false, firstChild: null,
+    appendChild() {}, remove() {}, setAttribute() {}, scrollIntoView() {},
+    insertBefore() {}, addEventListener() {} });
   globalThis.localStorage = shelf();
   globalThis.sessionStorage = shelf();
   globalThis.document = { getElementById: () => null,
@@ -412,9 +416,9 @@ section("Knowing whether there is anything to save");
   const zone = { name: "West", lat: 51.4, lon: 0.01, radius: 40,
     audio: "assets/audio/a.m4a" };
   const loaded = { park: { name: "The Park", zones: [zone] } };
-  const asLoaded = trailsToFile(loaded);
-  sessionStorage.setItem("mixtape-working-copy-2", JSON.stringify(
-    { baseSha: "abc", trails: JSON.parse(JSON.stringify(loaded)), asLoaded }));
+  sessionStorage.setItem("mixtape-working-copy-3", JSON.stringify(
+    { baseSha: "abc", trails: JSON.parse(JSON.stringify(loaded)),
+      original: JSON.parse(JSON.stringify(loaded)) }));
 
   check("straight after loading, there is nothing to save", !Curate.changed());
 
@@ -455,6 +459,24 @@ section("Knowing whether there is anything to save");
   Curate.update((t) => { t.park.zones.pop(); });
   check("adding a zone then removing it again leaves no trace",
     !Curate.changed());
+
+  // The warning has to be able to say what it is talking about, and
+  // has to be clearable — otherwise it is just nagging with no way out,
+  // which is what it was before.
+  Curate.update((t) => { t.park.name = "Renamed"; });
+  check("it can say which trail changed",
+    Curate.whatChanged().join(",") === "Renamed", Curate.whatChanged().join(","));
+  Curate.update((t) => { t.other = { name: "Brand new", zones: [] }; });
+  check("and notices a whole new trail",
+    Curate.whatChanged().includes("Brand new (new)"),
+    Curate.whatChanged().join(","));
+
+  Curate.revert();
+  check("discarding puts everything back", !Curate.changed());
+  check("and nothing is left to describe", Curate.whatChanged().length === 0);
+  check("the original trail is intact after discarding",
+    Curate.trails().park.name === "The Park" && !Curate.trails().other,
+    Curate.trails().park.name);
 
   Curate.discard();
   check("with nothing stored, there is nothing to save", !Curate.changed());
