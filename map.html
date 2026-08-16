@@ -11,24 +11,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-  <style>
-    /* The map fills the whole window. Leaflet insists its container
-       has a real height — forget this and you get a blank page. */
-    html, body { height: 100%; margin: 0; }
-    #map { height: 100%; }
-
-    /* The locate button floats over the map's top-right corner.
-       Leaflet's own layers use z-index values in the hundreds, so
-       1000 keeps the button on top and tappable. */
-    #locate {
-      position: absolute;
-      top: 10px;
-      right: 10px;
-      z-index: 1000;
-      padding: 8px 12px;
-      font-size: 16px;
-    }
-  </style>
+  <link rel="stylesheet" href="map.css">
 </head>
 <body>
 

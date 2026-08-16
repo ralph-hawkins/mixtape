@@ -1,0 +1,21 @@
+/* =====================================================================
+   The walker's page.
+
+   Small on purpose. Almost everything a walker sees is drawn by
+   Leaflet, whose own stylesheet is loaded before this one — so these
+   rules can override it, and must stay linked after it in index.html.
+
+   The height rule below is the load-bearing one. Leaflet needs its
+   container to have a real height; without it the map is invisible and
+   the page looks broken rather than unstyled.
+   ===================================================================== */
+
+/* The map gets the top half of the window (1vh = 1% of the window's
+   height), read-outs live below it. */
+#map { height: 50vh; }
+
+/* The per-zone status table: a little air between columns. */
+#zones td { padding-right: 1em; }
+
+/* The event log: plain lines, no bullets, slightly smaller. */
+#log { list-style: none; padding-left: 0; font-size: 0.9em; }
