@@ -312,11 +312,22 @@ section("Saving the trail never loses a setting");
 // The real code is lifted out of the page rather than copied, so this
 // cannot drift away from what actually runs.
 // =====================================================================
-const from = pageSource.indexOf("const ZONE_FIELDS");
-const to = pageSource.indexOf("// What the table shows");
-check("the serialiser can still be found in curate.html", from > 0 && to > from);
+// Found by explicit markers rather than by whatever comment happened
+// to follow it — an earlier version keyed off a passing comment, and
+// deleting that comment made this whole section fall over instead of
+// reporting anything useful.
+const from = pageSource.indexOf("// === SERIALISER START");
+const to = pageSource.indexOf("// === SERIALISER END");
+check("the serialiser markers are still in curate.html", from > 0 && to > from,
+  from < 0 ? "no START marker" : to < 0 ? "no END marker" : "");
 
-globalThis.document = { getElementById: () => ({ addEventListener() {} }) };
+if (from < 0 || to < from) {
+  console.log("\nCannot test the serialiser without those markers. " +
+    "Everything below this point was skipped.");
+  console.log("\n" + failures + " test(s) FAILED.");
+  process.exit(1);
+}
+
 const { trailsToFile, ZONE_FIELDS } = new Function(
   pageSource.slice(from, to) + "; return { trailsToFile, ZONE_FIELDS };")();
 

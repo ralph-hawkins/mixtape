@@ -46,17 +46,49 @@
              box-sizing: border-box; border: 1px solid #999;
              border-radius: 4px; }
 
-    /* A wide table must scroll inside its own box, or a phone ends up
-       scrolling the whole page sideways. */
-    .scroller { overflow-x: auto; margin: 1.2em 0; }
-    #zoneTable { border-collapse: collapse; font-size: 0.9em; }
-    #zoneTable th, #zoneTable td {
-      text-align: left; padding: 0.4em 0.9em 0.4em 0;
-      border-bottom: 1px solid #eee; white-space: nowrap;
-    }
-    #zoneTable th { color: #555; font-weight: 600; }
     #trailStatus { margin: 1em 0; padding: 0.9em 1em; border-radius: 4px; }
     #trailResult { margin-top: 1.2em; padding: 0.9em 1em; border-radius: 4px; }
+
+    /* Quieter buttons, so "Save the trail" stays the obvious one. */
+    button.secondary {
+      background: #fff; color: #1a4f7a; border: 1px solid #1a4f7a;
+      font-weight: 600; margin-top: 0.8em;
+    }
+    button.danger {
+      background: #fff; color: #b30000; border: 1px solid #b30000;
+    }
+
+    /* The zones, as a list of things to tap rather than a wide table —
+       a table of settings is unusable on the phone curators carry. */
+    #zoneList { list-style: none; padding: 0; margin: 1em 0 0; }
+    #zoneList li { margin-bottom: 0.5em; }
+    #zoneList button {
+      width: 100%; margin: 0; text-align: left; font-weight: 400;
+      font-size: 16px; padding: 0.7em 0.9em;
+      background: #f4f6f8; color: #111; border: 1px solid #dde3e8;
+    }
+    #zoneList button.chosen {
+      background: #e8f1fb; border-color: #1a4f7a; font-weight: 600;
+    }
+    #zoneList .where { color: #555; font-size: 0.85em; font-weight: 400; }
+
+    #zoneEditor {
+      border: 1px solid #dde3e8; border-radius: 6px;
+      padding: 0.2em 1em 1.2em; margin-top: 1.2em; background: #fbfcfd;
+    }
+    #zoneEditor h3 { margin-bottom: 0; }
+
+    input[type=number] {
+      font-size: 16px; padding: 0.6em; width: 100%;
+      box-sizing: border-box; border: 1px solid #999; border-radius: 4px;
+    }
+    /* Latitude and longitude side by side — they are one answer. */
+    .pair { display: flex; gap: 0.6em; }
+    .pair input { flex: 1; min-width: 0; }
+
+    audio { width: 100%; margin-top: 0.6em; }
+    #zPreviewNote:empty, #zFadeOutNote:empty { display: none; }
+    #zPreviewNote, #zFadeOutNote { margin-top: 0.4em; }
   </style>
 </head>
 <body>
@@ -82,7 +114,7 @@
   <input type="password" id="password" autocomplete="current-password">
 
   <label for="file">The sound
-    <span class="hint">— a voice memo or any sound file.</span>
+    <span class="hint">– a voice memo or any sound file.</span>
   </label>
   <input type="file" id="file" accept="audio/*">
 
@@ -105,11 +137,77 @@
 
   <label for="whichTrail">Which trail</label>
   <select id="whichTrail"></select>
+  <button id="newTrail" class="secondary">Add another trail</button>
 
   <div id="trailStatus" class="busy">Loading the trail…</div>
 
-  <div class="scroller">
-    <table id="zoneTable"></table>
+  <ul id="zoneList"></ul>
+  <button id="addZone" class="secondary">Add a zone</button>
+
+  <!-- The settings for whichever zone is selected above. -->
+  <div id="zoneEditor" hidden>
+    <h3 id="editorTitle">Zone</h3>
+
+    <label for="zName">Name
+      <span class="hint">– what to call this spot.</span>
+    </label>
+    <input type="text" id="zName">
+
+    <label for="zAudio">Sound
+      <span class="hint">– what plays here. Add new ones at the top of
+      this page.</span>
+    </label>
+    <select id="zAudio"></select>
+    <audio id="zPreview" controls preload="none"></audio>
+    <div id="zPreviewNote" class="hint"></div>
+
+    <label for="zRadius">Size
+      <span class="hint">– how far from the middle the sound reaches.
+      Below about 20 metres, GPS is too shaky to be reliable.</span>
+    </label>
+    <input type="number" id="zRadius" min="5" max="500" step="5">
+
+    <label for="zLat">Where it is
+      <span class="hint">– stand on the spot and read the Position line
+      off the trail page, or right-click the spot in Google Maps.</span>
+    </label>
+    <div class="pair">
+      <input type="text" id="zLat" inputmode="decimal" placeholder="latitude">
+      <input type="text" id="zLon" inputmode="decimal" placeholder="longitude">
+    </div>
+
+    <label for="zLoop">While someone stands in the zone</label>
+    <select id="zLoop">
+      <option value="false">Play once, then go quiet</option>
+      <option value="true">Repeat for as long as they stay</option>
+    </select>
+
+    <label for="zExit">When they walk out mid-sound</label>
+    <select id="zExit">
+      <option value="stop">Go quiet</option>
+      <option value="finish">Let it finish playing</option>
+    </select>
+
+    <label for="zPlaysKind">How many times it may start</label>
+    <select id="zPlaysKind">
+      <option value="always">As many times as they come back</option>
+      <option value="limit">A set number, then stay quiet</option>
+    </select>
+    <input type="number" id="zPlays" min="1" max="99" step="1" hidden>
+
+    <label for="zFadeIn">Fade in
+      <span class="hint">– seconds to rise from silence. 0 starts at
+      full volume.</span>
+    </label>
+    <input type="number" id="zFadeIn" min="0" max="60" step="1">
+
+    <label for="zFadeOut">Fade out
+      <span class="hint">– seconds to die away after they leave.</span>
+    </label>
+    <input type="number" id="zFadeOut" min="0" max="60" step="1">
+    <div id="zFadeOutNote" class="hint"></div>
+
+    <button id="deleteZone" class="danger">Remove this zone</button>
   </div>
 
   <button id="saveTrail" disabled>Save the trail</button>
@@ -260,11 +358,22 @@
       // accident, but leave the name and password alone.
       fileBox.value = "";
       refreshButton();
+
+      // Offer the new sound straight away, so a zone can point at it
+      // without reloading the page.
+      loadSounds().then(function () {
+        if (zones()[chosenZone]) { fillSoundChoices(zones()[chosenZone].audio); }
+      });
     });
 
     // ================================================================
     // The trail
     // ================================================================
+
+    // === SERIALISER START — everything down to the matching end
+    // marker is lifted out and run by test.mjs, so the tests exercise
+    // the real code rather than a copy of it. Keep this block free of
+    // anything that needs a page to exist. ===
 
     // The only settings a zone is allowed to have.
     //
@@ -296,21 +405,6 @@
       "const trail = trails[new URLSearchParams(location.search).get(\"trail\")]\n" +
       "           || trails[Object.keys(trails)[0]];\n";
 
-    let trailData = null;   // the trails, as loaded
-    let trailSha = null;    // the version they came from
-    let currentTrail = null;
-
-    const trailStatus = document.getElementById("trailStatus");
-    const trailResult = document.getElementById("trailResult");
-    const saveButton = document.getElementById("saveTrail");
-    const chooser = document.getElementById("whichTrail");
-
-    // Same test the walker's page applies when it loads a trail.
-    function isUsableNumber(value) {
-      return value !== null && value !== "" &&
-             Number.isFinite(Number(value));
-    }
-
     // Copy out just a zone's settings, leaving everything else behind.
     function zoneToPlain(zone) {
       const plain = {};
@@ -330,6 +424,24 @@
       });
       return FILE_HEADER + JSON.stringify(tidy, null, 2) + FILE_FOOTER;
     }
+
+    // Same test the walker's page applies when it loads a trail.
+    function isUsableNumber(value) {
+      return value !== null && value !== "" &&
+             Number.isFinite(Number(value));
+    }
+
+    // === SERIALISER END — do not move the marker above without
+    // updating test.mjs, which lifts this block out and runs it. ===
+
+    let trailData = null;   // the trails, as loaded
+    let trailSha = null;    // the version they came from
+    let currentTrail = null;
+
+    const trailStatus = document.getElementById("trailStatus");
+    const trailResult = document.getElementById("trailResult");
+    const saveButton = document.getElementById("saveTrail");
+    const chooser = document.getElementById("whichTrail");
 
     // Refuse to write a trail the walker's page could not read. Better
     // caught here, where somebody can fix it, than in a park.
@@ -356,45 +468,335 @@
       return problems;
     }
 
-    // What the table shows, in the same words the guide uses.
-    const COLUMNS = [
-      ["Zone", function (z) { return z.name; }],
-      ["Sound", function (z) { return String(z.audio || "").split("/").pop(); }],
-      ["Radius", function (z) { return z.radius + " m"; }],
-      ["Repeats", function (z) { return z.loop === true ? "yes" : "no"; }],
-      ["On leaving", function (z) {
-        return z.exit === "finish" ? "lets it finish" : "stops"; }],
-      ["Plays", function (z) {
-        return (typeof z.plays === "number") ? z.plays : "always"; }],
-      ["Fade in", function (z) { return (z.fadeIn || 0) + " s"; }],
-      ["Fade out", function (z) { return (z.fadeOut || 0) + " s"; }],
-      ["Position", function (z) { return z.lat + ", " + z.lon; }]
-    ];
+    // ----------------------------------------------------------------
+    // Which zone is being edited, and whether anything is unsaved.
+    // The trail lives in this page until Save is pressed — nothing
+    // reaches the repository before then.
+    // ----------------------------------------------------------------
+    let chosenZone = -1;
+    let unsaved = false;
+    let soundNames = [];
 
-    function renderZones() {
-      const table = document.getElementById("zoneTable");
-      table.innerHTML = "";
-      const zones = (trailData[currentTrail].zones) || [];
+    const editor = document.getElementById("zoneEditor");
+    const zoneList = document.getElementById("zoneList");
+    const preview = document.getElementById("zPreview");
+    const previewNote = document.getElementById("zPreviewNote");
 
-      const head = table.insertRow();
-      COLUMNS.forEach(function (column) {
-        const cell = document.createElement("th");
-        cell.textContent = column[0];
-        head.appendChild(cell);
-      });
-      zones.forEach(function (zone) {
-        const row = table.insertRow();
-        COLUMNS.forEach(function (column) {
-          row.insertCell().textContent = column[1](zone);
-        });
-      });
+    // Closing the tab with unsaved changes would take the work with it.
+    window.addEventListener("beforeunload", function (event) {
+      if (unsaved) { event.preventDefault(); event.returnValue = ""; }
+    });
 
-      trailStatus.className = "good";
-      trailStatus.textContent = zones.length + " zone" +
-        (zones.length === 1 ? "" : "s") + " in " +
-        trailData[currentTrail].name + ".";
+    function zones() {
+      if (!trailData || !trailData[currentTrail]) { return []; }
+      // Make sure it is the real list and not a throwaway empty one —
+      // otherwise a zone added to a trail that somehow has no list at
+      // all would be pushed into nothing and vanish without a word.
+      if (!Array.isArray(trailData[currentTrail].zones)) {
+        trailData[currentTrail].zones = [];
+      }
+      return trailData[currentTrail].zones;
+    }
+
+    function markUnsaved() {
+      unsaved = true;
       refreshSaveButton();
     }
+
+    function field(id) { return document.getElementById(id); }
+
+    // Keep a number as a number, so it is written to the file as one.
+    // Anything that is not a number is kept exactly as typed, so the
+    // check before saving can point at it instead of quietly turning
+    // it into nonsense.
+    function numberOrText(value) {
+      const text = String(value).trim();
+      return isUsableNumber(text) ? Number(text) : text;
+    }
+
+    function average(numbers) {
+      const usable = numbers.filter(Number.isFinite);
+      return usable.length
+        ? usable.reduce(function (a, b) { return a + b; }, 0) / usable.length
+        : null;
+    }
+
+    // ----------------------------------------------------------------
+    // The list of zones
+    // ----------------------------------------------------------------
+    function renderZoneList() {
+      zoneList.innerHTML = "";
+      zones().forEach(function (zone, index) {
+        const button = document.createElement("button");
+        button.className = (index === chosenZone) ? "chosen" : "";
+
+        const title = document.createElement("div");
+        title.textContent = zone.name || "(not named yet)";
+        const where = document.createElement("div");
+        where.className = "where";
+        where.textContent =
+          String(zone.audio || "no sound yet").split("/").pop() +
+          " · " + (zone.radius === undefined ? "?" : zone.radius) + " m";
+
+        button.appendChild(title);
+        button.appendChild(where);
+        button.addEventListener("click", function () { chooseZone(index); });
+
+        const item = document.createElement("li");
+        item.appendChild(button);
+        zoneList.appendChild(item);
+      });
+
+      const count = zones().length;
+      const trailName = trailData[currentTrail].name;
+      trailStatus.className = count ? "good" : "bad";
+      trailStatus.textContent = count
+        ? count + " zone" + (count === 1 ? "" : "s") + " in " + trailName +
+          (unsaved ? " — changed, not saved yet" : "")
+        : trailName + " has no zones yet. Add one before saving.";
+      refreshSaveButton();
+    }
+
+    function chooseZone(index) {
+      chosenZone = index;
+      renderZoneList();
+      fillEditor();
+    }
+
+    // ----------------------------------------------------------------
+    // The sounds that exist. The repository is public, so asking what
+    // is in the audio folder needs no password — it is the same list
+    // anyone could see.
+    // ----------------------------------------------------------------
+    function loadSounds() {
+      return fetch("https://api.github.com/repos/ralph-hawkins/mixtape/" +
+          "contents/assets/audio", { cache: "no-store" })
+        .then(function (response) { return response.ok ? response.json() : []; })
+        .then(function (files) {
+          soundNames = files
+            .filter(function (file) { return file.type === "file"; })
+            .map(function (file) { return "assets/audio/" + file.name; })
+            .sort();
+        })
+        .catch(function () { soundNames = []; });
+    }
+
+    function fillSoundChoices(chosen) {
+      const box = field("zAudio");
+      box.innerHTML = "";
+      const all = soundNames.slice();
+
+      // A zone may point at a sound that is no longer there. Show it
+      // anyway, marked — otherwise opening the zone would silently
+      // repoint it at something else.
+      if (chosen && all.indexOf(chosen) === -1) { all.unshift(chosen); }
+
+      if (all.length === 0) {
+        const none = document.createElement("option");
+        none.value = "";
+        none.textContent = "no sounds added yet";
+        box.appendChild(none);
+        return;
+      }
+      all.forEach(function (path) {
+        const option = document.createElement("option");
+        option.value = path;
+        option.textContent = path.split("/").pop() +
+          (soundNames.indexOf(path) === -1 ? "  (missing)" : "");
+        box.appendChild(option);
+      });
+      box.value = chosen || all[0];
+    }
+
+    function showPreview(path) {
+      previewNote.textContent = "";
+      if (!path) { preview.removeAttribute("src"); return; }
+      // A sound added a moment ago is in the repository but not yet on
+      // the website, so the preview can fail for a minute after
+      // uploading. Say which it is rather than looking broken.
+      preview.src = path + "?t=" + Date.now();
+      preview.onerror = function () {
+        previewNote.textContent = "Cannot play this one yet. If it was " +
+          "just added, give it a minute — it is still going live.";
+      };
+    }
+
+    function noteFadeOut() {
+      const zone = zones()[chosenZone];
+      field("zFadeOutNote").textContent =
+        (zone && zone.exit === "finish")
+          ? "Not used while this zone lets its sound finish — it ends " +
+            "naturally instead."
+          : "";
+    }
+
+    // ----------------------------------------------------------------
+    // The editor
+    // ----------------------------------------------------------------
+    function fillEditor() {
+      const zone = zones()[chosenZone];
+      if (!zone) { editor.hidden = true; return; }
+      editor.hidden = false;
+
+      field("editorTitle").textContent = zone.name || "This zone";
+      field("zName").value = zone.name || "";
+      field("zRadius").value = (zone.radius === undefined) ? "" : zone.radius;
+      field("zLat").value = (zone.lat === undefined) ? "" : zone.lat;
+      field("zLon").value = (zone.lon === undefined) ? "" : zone.lon;
+      field("zLoop").value = (zone.loop === true) ? "true" : "false";
+      field("zExit").value = (zone.exit === "finish") ? "finish" : "stop";
+      field("zFadeIn").value = zone.fadeIn || 0;
+      field("zFadeOut").value = zone.fadeOut || 0;
+
+      const limited = (typeof zone.plays === "number");
+      field("zPlaysKind").value = limited ? "limit" : "always";
+      field("zPlays").hidden = !limited;
+      field("zPlays").value = limited ? zone.plays : 1;
+
+      fillSoundChoices(zone.audio);
+      showPreview(zone.audio);
+      noteFadeOut();
+    }
+
+    // Every field writes straight into the zone as it is typed.
+    function onField(id, apply) {
+      ["input", "change"].forEach(function (event) {
+        field(id).addEventListener(event, function () {
+          const zone = zones()[chosenZone];
+          if (!zone) { return; }
+          apply(zone, field(id).value);
+          markUnsaved();
+          renderZoneList();
+        });
+      });
+    }
+
+    onField("zName", function (zone, value) {
+      zone.name = value;
+      field("editorTitle").textContent = value || "This zone";
+    });
+    onField("zRadius", function (zone, value) {
+      zone.radius = numberOrText(value);
+    });
+    onField("zLon", function (zone, value) { zone.lon = numberOrText(value); });
+    onField("zLoop", function (zone, value) { zone.loop = (value === "true"); });
+    onField("zExit", function (zone, value) {
+      zone.exit = value;
+      noteFadeOut();
+    });
+    onField("zFadeIn", function (zone, value) { zone.fadeIn = Number(value); });
+    onField("zFadeOut", function (zone, value) { zone.fadeOut = Number(value); });
+    onField("zAudio", function (zone, value) {
+      zone.audio = value;
+      showPreview(value);
+    });
+
+    // Latitude is its own handler, because Google Maps hands you both
+    // numbers in one piece — "51.461620, 0.010941". Pasting that into
+    // the first box fills in both, rather than making someone split it
+    // by hand and get it wrong.
+    ["input", "change"].forEach(function (event) {
+      field("zLat").addEventListener(event, function () {
+        const zone = zones()[chosenZone];
+        if (!zone) { return; }
+        const parts = field("zLat").value.split(",");
+        if (parts.length === 2 && parts[1].trim() !== "") {
+          field("zLat").value = parts[0].trim();
+          field("zLon").value = parts[1].trim();
+          zone.lon = numberOrText(parts[1]);
+        }
+        zone.lat = numberOrText(field("zLat").value);
+        markUnsaved();
+        renderZoneList();
+      });
+    });
+
+    field("zPlaysKind").addEventListener("change", function () {
+      const zone = zones()[chosenZone];
+      if (!zone) { return; }
+      const limited = field("zPlaysKind").value === "limit";
+      field("zPlays").hidden = !limited;
+      zone.plays = limited
+        ? Math.max(1, Number(field("zPlays").value) || 1) : "always";
+      if (limited) { field("zPlays").value = zone.plays; }
+      markUnsaved();
+    });
+
+    field("zPlays").addEventListener("input", function () {
+      const zone = zones()[chosenZone];
+      if (!zone) { return; }
+      zone.plays = Math.max(1, Number(field("zPlays").value) || 1);
+      markUnsaved();
+    });
+
+    // ----------------------------------------------------------------
+    // Adding and removing
+    // ----------------------------------------------------------------
+    document.getElementById("addZone").addEventListener("click", function () {
+      // A new zone starts out valid wherever possible — sat among the
+      // zones that already exist, with a sound already chosen. An
+      // invalid one would block saving the whole trail, and whoever
+      // added it would have to work out why.
+      const everywhere = [];
+      Object.keys(trailData).forEach(function (id) {
+        (trailData[id].zones || []).forEach(function (z) { everywhere.push(z); });
+      });
+      const lat = average(everywhere.map(function (z) { return Number(z.lat); }));
+      const lon = average(everywhere.map(function (z) { return Number(z.lon); }));
+
+      const zone = { name: "New zone", radius: 30 };
+      if (lat !== null) { zone.lat = lat; zone.lon = lon; }
+      if (soundNames.length) { zone.audio = soundNames[0]; }
+
+      zones().push(zone);
+      // Marked before drawing, so the list says "not saved yet" on the
+      // same pass rather than a beat later.
+      markUnsaved();
+      chooseZone(zones().length - 1);
+      field("zName").focus();
+      field("zName").select();
+    });
+
+    document.getElementById("deleteZone").addEventListener("click", function () {
+      const zone = zones()[chosenZone];
+      if (!zone) { return; }
+      const answer = window.confirm(
+        "Remove " + (zone.name || "this zone") + " from " +
+        trailData[currentTrail].name + "?\n\n" +
+        "It is only really gone once you save the trail.");
+      if (!answer) { return; }
+      zones().splice(chosenZone, 1);
+      chosenZone = -1;
+      editor.hidden = true;
+      markUnsaved();
+      renderZoneList();
+    });
+
+    document.getElementById("newTrail").addEventListener("click", function () {
+      const name = window.prompt("What is the new trail called?");
+      if (!name || !name.trim()) { return; }
+      const id = String(name).toLowerCase().replace(/[^a-z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "").slice(0, 40);
+      if (!id) {
+        window.alert("That name needs some letters or numbers in it.");
+        return;
+      }
+      if (trailData[id]) {
+        window.alert("There is already a trail called that.");
+        return;
+      }
+      trailData[id] = { name: name.trim(), zones: [] };
+      const option = document.createElement("option");
+      option.value = id;
+      option.textContent = name.trim();
+      chooser.appendChild(option);
+      chooser.value = id;
+      currentTrail = id;
+      chosenZone = -1;
+      editor.hidden = true;
+      markUnsaved();
+      renderZoneList();
+    });
 
     function refreshSaveButton() {
       saveButton.disabled = !(ready && trailData && trailSha &&
@@ -434,9 +836,12 @@
         currentTrail = chooser.value;
         chooser.addEventListener("change", function () {
           currentTrail = chooser.value;
-          renderZones();
+          // Nothing is selected in a trail you have only just opened.
+          chosenZone = -1;
+          editor.hidden = true;
+          renderZoneList();
         });
-        renderZones();
+        renderZoneList();
       };
       script.onerror = function () {
         trailProblem("Could not load the trail. Check you are online " +
@@ -515,6 +920,8 @@
       trailResult.className = "good";
       trailResult.textContent = "Trail saved. It will be live in about " +
         "a minute.";
+      unsaved = false;
+      renderZoneList();
       if (answer.warning) {
         const notice = document.getElementById("warning");
         notice.hidden = false;
@@ -525,7 +932,9 @@
       loadTrailVersion();
     });
 
-    loadTrail();
+    // The list of sounds is needed before a zone can be opened, so the
+    // trail waits for it. Everything else loads alongside.
+    loadSounds().then(loadTrail);
     loadTrailVersion();
   </script>
 
