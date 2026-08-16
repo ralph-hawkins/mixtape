@@ -147,6 +147,10 @@
       // will pause the track when the fade lands. Cancelled if the
       // walker comes back first.
       zone.fadeTimer = null;
+      // Set if the browser tells us the track cannot be loaded. A
+      // zone in that state is not quiet, it is broken — and the page
+      // should say the difference.
+      zone.trackFailed = false;
       // When a track reaches its natural end, its circle goes quiet —
       // or grey, if that was the zone's last allowed play. (This is
       // also what dims a "finish" zone once its last play-through
@@ -164,8 +168,14 @@
       // does so as the page opens: no need to walk anywhere to find
       // out.
       zone.player.addEventListener("error", function () {
+        zone.trackFailed = true;
         logEvent(zone.name + " — track will not load: " + zone.audio +
           " (check the spelling, and that the file is uploaded)");
+        // Tell the map and the table straight away. The circle and
+        // the row would otherwise sit there saying "quiet", which is
+        // true of the sound and a lie about the zone.
+        paintZone(zone);
+        updateZoneCells(zone);
       });
     });
 
@@ -186,9 +196,14 @@
     // Circle colours: Leaflet's usual blue when quiet, green while
     // the zone's track is playing, grey once a zone has used up all
     // its plays — visibly done rather than mysteriously silent.
+    // Orange is the odd one out: it means the zone is broken, not
+    // finished. It is drawn dashed as well, so it is still obvious to
+    // anyone who cannot easily tell the colours apart — and it is
+    // deliberately not red, which belongs to the you-are-here dot.
     const quietColour = "#3388ff";
     const playingColour = "#2a7f2a";
     const finishedColour = "#888888";
+    const brokenColour = "#d97706";
 
     // Has this zone used up its allowance of fresh starts?
     function playsSpent(zone) {
@@ -199,11 +214,18 @@
     // The one answer to "what is this zone doing right now?".
     // Everything that reports — circle colours, the zone table, the
     // audio read-out — asks this, so they can never disagree.
+    //   "track will not load" broken; it can never play
     //   "playing"          sound is coming out (a finish tail counts)
     //   "finished"         all plays used; the zone is done
     //   "paused mid-track" a stop-zone waiting for the walker back
     //   "quiet"            not started, or ended with plays left
     function zoneState(zone) {
+      // Broken comes first. A track that will not load can never be
+      // playing, and every answer below it would be a guess about a
+      // player with nothing to play.
+      if (zone.trackFailed) {
+        return "track will not load";
+      }
       if (!zone.player.paused && !zone.player.ended) {
         return "playing";
       }
@@ -221,9 +243,19 @@
     function paintZone(zone) {
       const state = zoneState(zone);
       let colour = quietColour;
+      // Only a broken zone is dashed. This has to be set every time,
+      // including back to null, or a dash would stick to a circle
+      // that has since recovered.
+      let dashes = null;
       if (state === "playing") { colour = playingColour; }
       if (state === "finished") { colour = finishedColour; }
-      zone.circle.setStyle({ color: colour, fillColor: colour });
+      if (state === "track will not load") {
+        colour = brokenColour;
+        dashes = "6 6";
+      }
+      zone.circle.setStyle({
+        color: colour, fillColor: colour, dashArray: dashes
+      });
     }
 
     // "play 1" or "play 1 of 2" — the same wording feeds the zone
@@ -340,6 +372,16 @@
       if (wasFadingOut) {
         clearTimeout(zone.fadeTimer);
         zone.fadeTimer = null;
+      }
+
+      // A track that will not load has nothing to start and nothing
+      // to carry on. Stop here, so arriving cannot spend a play on a
+      // zone that can never sound, and the log says the real reason
+      // once instead of "playing" followed by "play failed".
+      if (zone.trackFailed) {
+        logEvent("entered " + zone.name +
+          " — its track will not load, staying quiet");
+        return;
       }
 
       // Back before the fade-out finished, AND the track is still

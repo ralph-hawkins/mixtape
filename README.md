@@ -26,6 +26,11 @@ The page shows a map of the trail. Each zone is a circle:
 - **blue** — quiet
 - **green** — playing
 - **grey** — finished (it has used up its plays)
+- **orange, with a dashed edge** — broken: its track will not load,
+  so this zone will stay silent until it is fixed
+
+Grey and orange are worth telling apart. Grey is a zone that has
+done its job. Orange is a zone that never could.
 
 The red dot is you. The faint red ring around it is how sure the
 phone is about where you are — everything inside the ring is
@@ -136,6 +141,10 @@ The `audio` setting points at a file that is not there. Check the
 spelling, including capital letters, and check the file really was
 uploaded to `assets/audio`. This one appears as soon as you open the
 page — you do not need to tap Start or walk anywhere to see it.
+
+The zone's circle turns orange and dashed, and its row in the Zones
+table says "track will not load". Walking in does nothing and does
+not use up one of the zone's plays.
 
 **"play failed" or "could not be unlocked"**
 
