@@ -177,13 +177,18 @@
       where: function (zone) {
         ask("Where is this zone?",
           "Stand on the spot and read the Position line off the trail " +
-          "page, or right-click the place in Google Maps and paste both " +
-          "numbers into the first box.");
+          "page, or find the place in Google Maps and paste whatever it " +
+          "gives you into the first box — degrees and minutes, a link, " +
+          "or plain numbers all work.");
         const pair = document.createElement("div");
         pair.className = "pair";
         const lat = document.createElement("input");
-        lat.type = "text"; lat.id = "answer"; lat.inputMode = "decimal";
-        lat.placeholder = "latitude";
+        lat.type = "text"; lat.id = "answer";
+        // No number pad on this one: it takes degrees, minutes and
+        // seconds and map links as well as plain numbers, and a keypad
+        // with no letters or symbols would make those impossible to
+        // type. The second box only ever holds a number.
+        lat.placeholder = "latitude, or paste anything";
         lat.value = (zone.lat === undefined) ? "" : zone.lat;
         const lon = document.createElement("input");
         lon.type = "text"; lon.inputMode = "decimal";
@@ -193,23 +198,27 @@
         pair.appendChild(lon);
         box.appendChild(pair);
 
-        // Google Maps hands both numbers over in one piece. Paste that
-        // into the first box and it sorts itself out, rather than
-        // making somebody split it by hand and get it wrong.
+        // Whatever gets pasted into the first box, sort it out on the
+        // spot: a pair of numbers, degrees and minutes, or a map link.
+        // Nobody should have to know which sort they have, or split it
+        // by hand and get it wrong.
         lat.addEventListener("input", function () {
-          const parts = lat.value.split(",");
-          if (parts.length === 2 && parts[1].trim() !== "") {
-            lat.value = parts[0].trim();
-            lon.value = parts[1].trim();
+          const both = readPosition(lat.value);
+          if (both) {
+            lat.value = both.lat;
+            lon.value = both.lon;
           }
         });
 
         return function () {
-          if (!isUsableNumber(lat.value) || !isUsableNumber(lon.value)) {
-            return { problem: "Enter both numbers, for example " +
-              "51.461620 and 0.010941" };
+          // Read as one answer, so degrees and minutes typed across the
+          // two boxes work as well as a pair of plain numbers.
+          const both = readPosition(lat.value + ", " + lon.value);
+          if (!both) {
+            return { problem: "Enter a position — for example " +
+              "51.461620, 0.010941, or paste it straight from a map" };
           }
-          return { value: { lat: Number(lat.value), lon: Number(lon.value) } };
+          return { value: both };
         };
       },
 

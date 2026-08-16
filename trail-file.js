@@ -63,6 +63,107 @@ function isUsableNumber(value) {
          Number.isFinite(Number(value));
 }
 
+// Make sense of a position, however it arrives.
+//
+// Nobody should have to know which of these they have. Google Maps
+// gives you decimal degrees from a right-click, but degrees, minutes
+// and seconds on a place card, and something else again in the address
+// bar. Other maps differ again. All of these mean the same place:
+//
+//   51.461620, 0.010941
+//   51.461620 0.010941
+//   51.4616° N, 0.0109° E
+//   51°27'41.8"N 0°00'39.4"E
+//   51°27.697'N 0°0.656'E
+//   https://www.google.com/maps/@51.46162,0.010941,17z
+//
+// Returns { lat, lon }, or null if it cannot be read.
+function readPosition(text) {
+  let s = String(text === undefined || text === null ? "" : text)
+    // Phones and web pages love a curly quote. Flatten them all first,
+    // or a perfectly good position fails for invisible reasons.
+    .replace(/[′’ʹ´`]/g, "'")
+    .replace(/[″”“ʺ]/g, '"')
+    .replace(/[º˚]/g, "°")
+    .replace(/−/g, "-")
+    .trim();
+  if (!s) { return null; }
+
+  // A map link. The !3d/!4d pair is the pin someone actually dropped;
+  // the @ pair is only where the map happened to be centred, so it is
+  // the second choice.
+  // Looked for one at a time, not as a pair, because they do not
+  // always appear in that order — and a link whose pin was missed
+  // would quietly fall back to the map centre, which looks like a
+  // perfectly good position and is the wrong place.
+  const pinLat = s.match(/!3d(-?\d+(?:\.\d+)?)/);
+  const pinLon = s.match(/!4d(-?\d+(?:\.\d+)?)/);
+  if (pinLat && pinLon) {
+    return asPosition(Number(pinLat[1]), Number(pinLon[1]));
+  }
+  const centred = s.match(/[@=](-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/);
+  if (centred) {
+    return asPosition(Number(centred[1]), Number(centred[2]));
+  }
+
+  const found = [];
+  if (/[°'"]/.test(s)) {
+    // Degrees, minutes and seconds — in any of its half-finished
+    // forms, since minutes and seconds are both optional.
+    const parts = /(-?\d+(?:\.\d+)?)\s*°\s*(?:(\d+(?:\.\d+)?)\s*'\s*)?(?:(\d+(?:\.\d+)?)\s*"\s*)?\s*([NSEW])?/gi;
+    let piece;
+    while ((piece = parts.exec(s)) !== null) {
+      if (!piece[0].trim()) { break; }
+      const degrees = Number(piece[1]);
+      let value = Math.abs(degrees) + Number(piece[2] || 0) / 60 +
+                  Number(piece[3] || 0) / 3600;
+      if (degrees < 0) { value = -value; }
+      found.push({ value: value, side: (piece[4] || "").toUpperCase() });
+    }
+  } else {
+    // Plain numbers. Only treated as degrees, minutes and seconds when
+    // the symbols are actually there — otherwise "51.4616 0.0109"
+    // would read the longitude as minutes of latitude.
+    const parts = /(-?\d+(?:\.\d+)?)\s*([NSEW])?/gi;
+    let piece;
+    while ((piece = parts.exec(s)) !== null) {
+      if (!piece[0].trim()) { break; }
+      found.push({ value: Number(piece[1]),
+                   side: (piece[2] || "").toUpperCase() });
+    }
+  }
+  if (found.length < 2) { return null; }
+
+  let first = found[0];
+  let second = found[1];
+  // Some places write longitude first. If the letters say so, believe
+  // them rather than the order.
+  if ((first.side === "E" || first.side === "W") &&
+      (second.side === "N" || second.side === "S")) {
+    const swap = first; first = second; second = swap;
+  }
+  const lat = (first.side === "S") ? -Math.abs(first.value) : first.value;
+  const lon = (second.side === "W") ? -Math.abs(second.value) : second.value;
+  return asPosition(lat, lon);
+}
+
+// Only hand back a position that could exist on Earth. A misread
+// number is worse than an honest refusal — it would put a zone
+// somewhere real, just nowhere near the right place.
+function asPosition(lat, lon) {
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) { return null; }
+  if (Math.abs(lat) > 90 || Math.abs(lon) > 180) { return null; }
+  // Six decimal places is about 10 centimetres, which is far finer than
+  // any phone can tell. Converting from degrees and seconds otherwise
+  // lands sixteen digits in the trail file, claiming a precision that
+  // does not exist and making it horrible to read.
+  return { lat: toSixPlaces(lat), lon: toSixPlaces(lon) };
+}
+
+function toSixPlaces(n) {
+  return Math.round(n * 1e6) / 1e6;
+}
+
 // Turn a name into something safe to put in a web address.
 function trailId(name) {
   return String(name).toLowerCase()
@@ -126,5 +227,6 @@ function trailProblems(all) {
 // an ordinary script tag, exactly as they load trail.js.
 if (typeof module !== "undefined" && module.exports) {
   module.exports = { ZONE_FIELDS, trailsToFile, zoneToPlain,
-    isUsableNumber, trailId, zoneProblems, trailProblems };
+    isUsableNumber, trailId, zoneProblems, trailProblems,
+    readPosition };
 }

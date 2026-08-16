@@ -29,7 +29,7 @@ const workerSource = readFileSync(new URL("worker.js", import.meta.url), "utf8")
 // very code the tool runs, not a copy of it.
 const require = createRequire(import.meta.url);
 const { trailsToFile, ZONE_FIELDS, isUsableNumber, trailId,
-        zoneProblems, trailProblems } = require("./trail-file.js");
+        zoneProblems, trailProblems, readPosition } = require("./trail-file.js");
 
 // Load worker.js as a module without renaming it or adding a
 // package.json, by handing its text straight to the importer.
@@ -508,6 +508,63 @@ section("Knowing whether there is anything to save");
     loadCurate("localhost").includes("localNotice"));
   check("and the same from the numeric address",
     loadCurate("127.0.0.1").includes("localNotice"));
+}
+
+// =====================================================================
+section("Reading a position, however it is written");
+// Nobody should have to know which sort of coordinate they are holding.
+// Google Maps alone gives decimal degrees from a right-click, degrees
+// and minutes on a place card, and something else again in the address
+// bar.
+// =====================================================================
+{
+  const near = (got, lat, lon) => !!got &&
+    Math.abs(got.lat - lat) < 0.001 && Math.abs(got.lon - lon) < 0.001;
+  const PARK = [51.46162, 0.010941];
+
+  for (const [label, written] of [
+    ["decimal with a comma",   "51.461620, 0.010941"],
+    ["decimal with a space",   "51.461620 0.010941"],
+    ["decimal, no space",      "51.46162,0.010941"],
+    ["degree signs",           "51.46162\u00b0 N, 0.010941\u00b0 E"],
+    ["letters, no degrees",    "51.46162N 0.010941E"],
+    ["degrees minutes seconds","51\u00b027\'41.8\"N 0\u00b000\'39.4\"E"],
+    ["curly quotes",           "51\u00b027\u203241.8\u2033N 0\u00b000\u203239.4\u2033E"],
+    ["degrees and minutes",    "51\u00b027.697\'N 0\u00b00.656\'E"],
+    ["a map link",             "https://www.google.com/maps/@51.46162,0.010941,17z"],
+    ["a link with a dropped pin",
+      "https://maps.google.com/x/@51.1,0.1,17z/data=!3d51.46162!4d0.010941"],
+    ["the same, written backwards",
+      "https://maps.google.com/x/@51.1,0.1,17z/data=!4d0.010941!3d51.46162"],
+    ["messy whitespace",       "  51.461620 , 0.010941  "]]) {
+    check(label, near(readPosition(written), PARK[0], PARK[1]),
+      JSON.stringify(readPosition(written)));
+  }
+
+  check("south and west come out negative",
+    near(readPosition("33\u00b051\'54\"S 151\u00b012\'36\"E"), -33.865, 151.21),
+    JSON.stringify(readPosition("33\u00b051\'54\"S 151\u00b012\'36\"E")));
+  check("minus signs work too",
+    near(readPosition("-33.865, 151.209"), -33.865, 151.209));
+  check("longitude written first is put the right way round",
+    near(readPosition("0.010941E, 51.46162N"), PARK[0], PARK[1]),
+    JSON.stringify(readPosition("0.010941E, 51.46162N")));
+
+  // Refusing is the right answer for anything it cannot be sure of. A
+  // misread number would put the zone somewhere real, just nowhere near
+  // the right place — far worse than saying so.
+  for (const [label, written] of [
+    ["nothing", ""],
+    ["only one number", "51.46162"],
+    ["a place name", "Priory Park"],
+    ["an impossible latitude", "191.5, 0.01"],
+    ["an impossible longitude", "51.4, 999"],
+    ["words", "north a bit"],
+    ["null", null],
+    ["undefined", undefined]]) {
+    check("refuses " + label, readPosition(written) === null,
+      JSON.stringify(readPosition(written)));
+  }
 }
 
 // =====================================================================
