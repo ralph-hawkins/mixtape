@@ -116,6 +116,16 @@
           (playsSpent(zone) ? " — all plays used" : ""));
         updateZoneCells(zone);
       });
+      // If the track itself won't load — a typo in the audio line, a
+      // file that was never uploaded — the browser tells the player
+      // and nobody else. Without this the zone simply stays quiet in
+      // a field with nothing to blame. Now it names itself, and it
+      // does so as the page opens: no need to walk anywhere to find
+      // out.
+      zone.player.addEventListener("error", function () {
+        logEvent(zone.name + " — track will not load: " + zone.audio +
+          " (check the spelling, and that the file is uploaded)");
+      });
     });
 
     // The map — same recipe as map.html: OpenStreetMap tiles, one
@@ -353,7 +363,14 @@
       if (!wasAudible) {
         fadeUp(zone);
       }
-      zone.player.play();
+      // play() can still fail at the moment it matters most — a track
+      // that never finished downloading, a browser that changed its
+      // mind. Until now that refusal went nowhere: the log said
+      // "playing", the circle turned green, and the walker heard
+      // nothing. Catch it and say so.
+      zone.player.play().catch(function (error) {
+        logEvent(zone.name + " — play failed: " + error.message);
+      });
       paintZone(zone);
     }
 
@@ -483,8 +500,13 @@
             zone.player.pause();
           },
           function (error) {
-            document.getElementById("audio-state").textContent =
-              zone.name + " failed: " + error.message;
+            // This used to be written to the Audio read-out, where it
+            // survived only until the first position fix rebuilt that
+            // line — the message was gone within seconds, usually
+            // before anyone read it. The log keeps it, timestamped,
+            // at the top.
+            logEvent(zone.name + " — could not be unlocked: " +
+              error.message);
           }
         );
       });
