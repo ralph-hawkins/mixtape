@@ -408,6 +408,10 @@ section("Knowing whether there is anything to save");
   globalThis.document = { getElementById: () => null,
     createElement: nothing, body: nothing() };
   globalThis.window = { addEventListener() {} };
+  // curate.js checks where it is being served from as it loads, to warn
+  // when the pages are local but saving is not.
+  globalThis.location = { hostname: "ralph-hawkins.github.io",
+    search: "", pathname: "/mixtape/trail.html", href: "" };
 
   const curateSource = readFileSync(new URL("curate.js", import.meta.url), "utf8");
   const Curate = new Function("trailsToFile", "trailProblems", "trailId",
@@ -480,6 +484,27 @@ section("Knowing whether there is anything to save");
 
   Curate.discard();
   check("with nothing stored, there is nothing to save", !Curate.changed());
+
+  // Saving from a local copy still writes to the live trail, so the
+  // tool has to say so. Checked by counting what it puts on the page.
+  let added = [];
+  globalThis.document.body.insertBefore = (node) => added.push(node.id);
+
+  const loadCurate = (hostname) => {
+    globalThis.location = { hostname, search: "", pathname: "/curate.html" };
+    globalThis.document.getElementById = () => null;
+    added = [];
+    new Function("trailsToFile", "trailProblems", "trailId",
+      curateSource + "; return Curate;")(
+      trailsToFile, trailProblems, trailId);
+    return added;
+  };
+  check("served from the real site, it says nothing about being local",
+    !loadCurate("ralph-hawkins.github.io").includes("localNotice"));
+  check("served from localhost, it warns that saving is not local",
+    loadCurate("localhost").includes("localNotice"));
+  check("and the same from the numeric address",
+    loadCurate("127.0.0.1").includes("localNotice"));
 }
 
 // =====================================================================
