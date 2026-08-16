@@ -282,12 +282,22 @@
     // A walker has just crossed INTO this zone. Decide whether that
     // means sound, and keep the log honest about the decision.
     function arriveAt(zone) {
-      // Back before a fade-out finished? The pause never happened —
-      // cancel it, turn the knob back up, and this is simply the
-      // same play carrying on.
-      if (zone.fadeTimer !== null) {
+      // A pause still waiting on a fade-out is always stale the moment
+      // the walker returns — whatever else is true, it must not fire.
+      // Cancel it first, then work out what this arrival means.
+      const wasFadingOut = (zone.fadeTimer !== null);
+      if (wasFadingOut) {
         clearTimeout(zone.fadeTimer);
         zone.fadeTimer = null;
+      }
+
+      // Back before the fade-out finished, AND the track is still
+      // running? Then the sound never stopped — turn the knob back up
+      // and this is simply the same play carrying on.
+      // A track that ran out on its own mid-fade is a different story:
+      // there is nothing to carry on. It falls through to the normal
+      // path below and starts again properly.
+      if (wasFadingOut && !zone.player.ended) {
         fadeRecover(zone);
         zone.player.loop = (zone.loop === true);
         logEvent("entered " + zone.name +
