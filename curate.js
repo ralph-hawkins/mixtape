@@ -313,6 +313,19 @@ const Curate = (function () {
   // A quiet strip at the top of every page while work is unsaved, so
   // nobody closes the tab thinking it went in.
   // -------------------------------------------------------------------
+  // Under the masthead, not above it. Putting it first in the page left
+  // a yellow strip sitting on top of the black brand bar, which looked
+  // like something had gone wrong with the page rather than a notice
+  // about the work.
+  function putStripOnPage(strip) {
+    const masthead = document.querySelector(".masthead");
+    if (masthead && masthead.parentNode === document.body) {
+      masthead.insertAdjacentElement("afterend", strip);
+    } else {
+      document.body.insertBefore(strip, document.body.firstChild);
+    }
+  }
+
   function showUnsavedBanner() {
     const there = document.getElementById("unsavedBanner");
     if (!changed()) { if (there) { there.remove(); } return; }
@@ -343,8 +356,7 @@ const Curate = (function () {
       location.reload();
     });
     strip.appendChild(undo);
-
-    document.body.insertBefore(strip, document.body.firstChild);
+    putStripOnPage(strip);
   }
 
   // There is deliberately no "leave site?" warning.
@@ -371,7 +383,7 @@ const Curate = (function () {
     strip.textContent = "Running from your own machine. The trail shown " +
       "is the file on this computer, but saving writes to the live one — " +
       "so run git pull first.";
-    document.body.insertBefore(strip, document.body.firstChild);
+    putStripOnPage(strip);
   }
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", warnIfLocal);

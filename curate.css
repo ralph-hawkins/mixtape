@@ -36,6 +36,11 @@ body {
   font-size: 19px; line-height: 1.32;
   color: var(--ink); background: #fff;
   margin: 0; padding: 0;
+  /* A sound filename can be 44 characters with no spaces in it, and the
+     link to a saved trail is longer still. A narrow phone fits about
+     20. Without this they push the whole page sideways. Only breaks a
+     word that would not otherwise fit. */
+  overflow-wrap: break-word;
 }
 
 /* A masthead, so it is always obvious which tool this is. */
@@ -43,8 +48,6 @@ body {
   background: var(--ink); color: #fff;
   padding: 0.7em 1em; font-weight: 700;
 }
-.masthead a { color: #fff; text-decoration: none; }
-
 .page { max-width: 36em; margin: 0 auto; padding: 1em 1em 4em; }
 
 h1 { font-size: 1.8em; line-height: 1.1; margin: 0.6em 0 0.7em; }
@@ -58,14 +61,14 @@ a:hover { color: #003078; }
 
 /* Everything focusable gets the same loud yellow marker. Losing track
    of where you are on a form is miserable on a phone. */
-a:focus, button:focus, input:focus, select:focus, summary:focus {
+a:focus, button:focus, input:focus {
   outline: 3px solid transparent;
   background-color: var(--focus);
   box-shadow: 0 -2px var(--focus), 0 4px var(--ink);
   color: var(--ink);
   text-decoration: none;
 }
-input:focus, select:focus { box-shadow: inset 0 0 0 2px; background: #fff; }
+input:focus { box-shadow: inset 0 0 0 2px; background: #fff; }
 
 /* --- Getting back ---------------------------------------------------- */
 
@@ -88,15 +91,13 @@ label.question, legend.question {
 fieldset { border: 0; padding: 0; margin: 0; }
 
 input[type=text], input[type=password], input[type=number],
-input[type=file], select, textarea {
+input[type=file] {
   font-family: inherit; font-size: 1em;
   width: 100%; padding: 0.5em;
   border: 2px solid var(--ink); border-radius: 0;
   background: #fff; color: var(--ink);
   margin-bottom: 0.4em;
 }
-select { height: 2.4em; }
-
 /* Two boxes that are really one answer. */
 .pair { display: flex; gap: 0.6em; }
 .pair input { flex: 1; min-width: 0; }
@@ -112,6 +113,12 @@ select { height: 2.4em; }
 .choice input { position: absolute; left: 0.8em; top: 1em;
                 width: 1.4em; height: 1.4em; margin: 0; }
 .choice:has(input:checked) { border-color: var(--ink); background: #fff; }
+/* Chosen and focused are different things and have to look different.
+   Without this the only sign of focus was on the radio itself, which
+   browsers draw faintly and which is easy to lose on a phone. */
+.choice:has(input:focus) {
+  border-color: var(--ink); box-shadow: 0 0 0 4px var(--focus);
+}
 .choice .note { display: block; color: var(--grey); font-size: 0.9em;
                 margin-top: 0.2em; }
 
@@ -140,7 +147,12 @@ button, .button {
    These carry the same weight as the rules above, so the order is
    what makes them win. */
 .button:focus, .button.secondary:focus { color: var(--ink); }
-button:active, .button:active { top: 2px; box-shadow: none; }
+/* Moved, not offset: "top" does nothing without a position, so the
+   button used to lose its edge on press without ever going down —
+   which read as a flicker rather than a press. */
+button:active, .button:active {
+  transform: translateY(2px); box-shadow: none;
+}
 button[disabled] { opacity: 0.5; cursor: default; }
 
 button.secondary, .button.secondary {
@@ -184,9 +196,6 @@ button.danger {
 .problem h2 { margin-top: 0; font-size: 1.2em; }
 .problem ul { margin: 0; padding-left: 1.2em; }
 .problem a { color: var(--red); }
-
-.field-problem { color: var(--red); font-weight: 700; margin: 0 0 0.4em; }
-.has-problem { border-left: 5px solid var(--red); padding-left: 0.9em; }
 
 .panel {
   background: var(--green); color: #fff;

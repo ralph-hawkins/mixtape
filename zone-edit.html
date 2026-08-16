@@ -192,7 +192,9 @@
         // seconds and map links as well as plain numbers, and a keypad
         // with no letters or symbols would make those impossible to
         // type. The second box only ever holds a number.
-        lat.placeholder = "latitude, or paste anything";
+        // Half-width on a phone, so anything longer is cut off
+        // mid-word. What can be pasted is in the hint above.
+        lat.placeholder = "latitude";
         lat.value = (zone.lat === undefined) ? "" : zone.lat;
         const lon = document.createElement("input");
         lon.type = "text"; lon.inputMode = "decimal";

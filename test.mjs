@@ -410,6 +410,9 @@ section("Knowing whether there is anything to save");
   // the tab and there is nothing to warn about on the way out.
   globalThis.window = { addEventListener() {}, localStorage: null };
   globalThis.document = { getElementById: () => null,
+    // The strip is placed relative to the masthead now, so the pretend
+    // browser has to be able to be asked for one.
+    querySelector: () => null,
     createElement: nothing, body: nothing() };
   globalThis.window.localStorage = globalThis.localStorage;
   // curate.js checks where it is being served from as it loads, to warn
@@ -497,6 +500,7 @@ section("Knowing whether there is anything to save");
   const loadCurate = (hostname) => {
     globalThis.location = { hostname, search: "", pathname: "/curate.html" };
     globalThis.document.getElementById = () => null;
+    globalThis.document.querySelector = () => null;
     added = [];
     new Function("trailsToFile", "trailProblems", "trailId",
       curateSource + "; return Curate;")(
