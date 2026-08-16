@@ -44,13 +44,39 @@
   <script src="trail.js"></script>
 
   <script>
-    // Same loud failure as the walker's page: a map with no trail
-    // should say why, not show an empty world.
-    if (typeof trail === "undefined") {
-      document.getElementById("map").textContent =
-        "trail.js failed to load — check the file for typos";
-      throw new Error("trail.js missing or broken");
+    // Same loud failures as the walker's page, in the same words — a
+    // map with no trail should say why, not show an empty world. This
+    // page especially: it is where an author comes to check an edit,
+    // so it must survive the very mistake they are checking for.
+    function stopWithTrailProblem(message) {
+      document.getElementById("map").textContent = message;
+      throw new Error(message);
     }
+
+    function isUsableNumber(value) {
+      return value !== null && value !== "" &&
+             Number.isFinite(Number(value));
+    }
+
+    if (typeof trail === "undefined") {
+      stopWithTrailProblem(
+        "trail.js failed to load — check the file for typos");
+    }
+
+    if (!Array.isArray(trail.zones) || trail.zones.length === 0) {
+      stopWithTrailProblem(
+        "trail.js has no zones — a trail needs at least one");
+    }
+
+    trail.zones.forEach(function (zone, index) {
+      const label = zone.name || ("zone " + (index + 1));
+      ["lat", "lon", "radius"].forEach(function (setting) {
+        if (!isUsableNumber(zone[setting])) {
+          stopWithTrailProblem(label + " — its " + setting +
+            " is missing or is not a number");
+        }
+      });
+    });
 
     // Build a map in the box above. No start view yet — we frame it
     // around the trail once the zones are drawn, below.

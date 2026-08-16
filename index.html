@@ -67,12 +67,53 @@
     // First: did the trail actually arrive? If trail.js is missing or
     // has a typo that breaks it, say so loudly and stop — a page that
     // carries on without its trail just looks mysteriously dead.
-    if (typeof trail === "undefined") {
-      document.getElementById("audio-state").textContent =
-        "trail.js failed to load — check the file for typos";
+    // Something in the trail file makes the page impossible to build.
+    // Say what, where the walker is actually looking, and stop. The
+    // alternative is a page that dies quoting the map library, which
+    // blames Leaflet for what was really the last edit.
+    function stopWithTrailProblem(message) {
+      document.getElementById("audio-state").textContent = message;
+      document.getElementById("map").textContent = message;
       document.getElementById("start").disabled = true;
-      throw new Error("trail.js missing or broken");
+      throw new Error(message);
     }
+
+    // A number we can actually use. Rejects a setting left out
+    // altogether, and a word where a number should be. Quote marks
+    // round a number are untidy but harmless, so they still pass —
+    // this is here to catch what would break the page, not to mark
+    // anyone's homework.
+    function isUsableNumber(value) {
+      return value !== null && value !== "" &&
+             Number.isFinite(Number(value));
+    }
+
+    if (typeof trail === "undefined") {
+      stopWithTrailProblem(
+        "trail.js failed to load — check the file for typos");
+    }
+
+    // A trail with no zones is not a trail. The map cannot frame
+    // itself around nothing and the engine has nothing to measure
+    // against — so this must be caught here, by name.
+    if (!Array.isArray(trail.zones) || trail.zones.length === 0) {
+      stopWithTrailProblem(
+        "trail.js has no zones — a trail needs at least one");
+    }
+
+    // Every zone needs a position and a size that are really numbers.
+    // Leave one out and the map throws "Invalid LatLng object" — true,
+    // and no help at all to whoever made the edit. Name the zone and
+    // the setting instead.
+    trail.zones.forEach(function (zone, index) {
+      const label = zone.name || ("zone " + (index + 1));
+      ["lat", "lon", "radius"].forEach(function (setting) {
+        if (!isUsableNumber(zone[setting])) {
+          stopWithTrailProblem(label + " — its " + setting +
+            " is missing or is not a number");
+        }
+      });
+    });
 
     let updateCount = 0;
     let lastFixAt = null;
