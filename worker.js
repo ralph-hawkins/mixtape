@@ -228,15 +228,24 @@ async function saveTrail(body, who, env, cors) {
     return reply(413, { error: "That trail is implausibly large." }, cors);
   }
   // The trail is the one file that SHOULD be replaced — that is what
-  // saving means. So it looks up the version it is replacing and hands
-  // that back to GitHub, which refuses if someone else has saved in the
-  // meantime rather than quietly burying their work.
-  const existing = await lookUp("trail.js", env);
-  if (existing.status === 401 || existing.status === 403) {
-    return reply(502, { error: keyProblem(existing.status) }, cors);
+  // saving means. But it must replace the version the curator was
+  // actually looking at, so the page has to say which that was.
+  //
+  // Looking it up here instead would be worthless: the answer would
+  // always be the current version, so every save would always succeed
+  // and would quietly bury whatever someone else had just done. The
+  // check only means anything if the version comes from the page.
+  const baseSha = String(body.baseSha || "");
+  if (!baseSha) {
+    return reply(400, {
+      error: "This page did not say which version of the trail it " +
+             "started from, so saving might have overwritten someone " +
+             "else's work. Reload the page and make the change again."
+    }, cors);
   }
+
   return await putFile("trail.js", base64FromText(text),
-    who + " changed the trail", existing.sha,
+    who + " changed the trail", baseSha,
     { savedName: "trail.js" }, env, cors);
 }
 

@@ -40,6 +40,23 @@
     }
     #added { padding-left: 1.2em; color: #333; font-size: 0.95em; }
     footer { margin-top: 2.5em; color: #666; font-size: 0.9em; }
+
+    hr { margin: 2.5em 0 1.5em; border: 0; border-top: 1px solid #ddd; }
+    select { font-size: 16px; padding: 0.5em; width: 100%;
+             box-sizing: border-box; border: 1px solid #999;
+             border-radius: 4px; }
+
+    /* A wide table must scroll inside its own box, or a phone ends up
+       scrolling the whole page sideways. */
+    .scroller { overflow-x: auto; margin: 1.2em 0; }
+    #zoneTable { border-collapse: collapse; font-size: 0.9em; }
+    #zoneTable th, #zoneTable td {
+      text-align: left; padding: 0.4em 0.9em 0.4em 0;
+      border-bottom: 1px solid #eee; white-space: nowrap;
+    }
+    #zoneTable th { color: #555; font-weight: 600; }
+    #trailStatus { margin: 1em 0; padding: 0.9em 1em; border-radius: 4px; }
+    #trailResult { margin-top: 1.2em; padding: 0.9em 1em; border-radius: 4px; }
   </style>
 </head>
 <body>
@@ -80,9 +97,28 @@
   <h2 id="addedHeading" hidden>Added just now</h2>
   <ul id="added"></ul>
 
+  <hr>
+
+  <h2>The trail</h2>
+  <p class="lead">Every zone in the trail, and the sound each one
+  plays. Walk into a zone and its sound starts.</p>
+
+  <label for="whichTrail">Which trail</label>
+  <select id="whichTrail"></select>
+
+  <div id="trailStatus" class="busy">Loading the trail…</div>
+
+  <div class="scroller">
+    <table id="zoneTable"></table>
+  </div>
+
+  <button id="saveTrail" disabled>Save the trail</button>
+
+  <div id="trailResult" hidden></div>
+
   <footer>
-    <p>Once a sound is added you can point a zone at it. Ask Ralph if
-    you are not sure which sound belongs where.</p>
+    <p>Sounds are shared between trails, so anything added above can be
+    used by any of them.</p>
   </footer>
 
   <script>
@@ -225,6 +261,272 @@
       fileBox.value = "";
       refreshButton();
     });
+
+    // ================================================================
+    // The trail
+    // ================================================================
+
+    // The only settings a zone is allowed to have.
+    //
+    // Everything written back to trail.js is copied from this list, in
+    // this order — never from the zone object itself. Zones collect
+    // working parts as they are used (map circles, audio players, table
+    // cells), and writing one of those into the trail file would ruin
+    // it. Copying only what is named here makes that impossible.
+    const ZONE_FIELDS = ["name", "lat", "lon", "radius", "audio",
+      "loop", "exit", "plays", "fadeIn", "fadeOut"];
+
+    const FILE_HEADER =
+      "// =================================================================\n" +
+      "// The trail definition.\n" +
+      "//\n" +
+      "// Written by the curator tool:\n" +
+      "//   https://ralph-hawkins.github.io/mixtape/curate.html\n" +
+      "//\n" +
+      "// It can still be edited by hand, but the tool rewrites the whole\n" +
+      "// file whenever anyone saves, so comments added here will not\n" +
+      "// survive.\n" +
+      "// =================================================================\n" +
+      "\nconst trails = ";
+
+    const FILE_FOOTER =
+      ";\n\n" +
+      "// Which trail this page is playing. Add ?trail=<name> to the web\n" +
+      "// address to choose one; without that, the first in the file.\n" +
+      "const trail = trails[new URLSearchParams(location.search).get(\"trail\")]\n" +
+      "           || trails[Object.keys(trails)[0]];\n";
+
+    let trailData = null;   // the trails, as loaded
+    let trailSha = null;    // the version they came from
+    let currentTrail = null;
+
+    const trailStatus = document.getElementById("trailStatus");
+    const trailResult = document.getElementById("trailResult");
+    const saveButton = document.getElementById("saveTrail");
+    const chooser = document.getElementById("whichTrail");
+
+    // Same test the walker's page applies when it loads a trail.
+    function isUsableNumber(value) {
+      return value !== null && value !== "" &&
+             Number.isFinite(Number(value));
+    }
+
+    // Copy out just a zone's settings, leaving everything else behind.
+    function zoneToPlain(zone) {
+      const plain = {};
+      ZONE_FIELDS.forEach(function (field) {
+        if (zone[field] !== undefined) { plain[field] = zone[field]; }
+      });
+      return plain;
+    }
+
+    function trailsToFile(all) {
+      const tidy = {};
+      Object.keys(all).forEach(function (id) {
+        tidy[id] = {
+          name: all[id].name,
+          zones: (all[id].zones || []).map(zoneToPlain)
+        };
+      });
+      return FILE_HEADER + JSON.stringify(tidy, null, 2) + FILE_FOOTER;
+    }
+
+    // Refuse to write a trail the walker's page could not read. Better
+    // caught here, where somebody can fix it, than in a park.
+    function trailProblems(all) {
+      const problems = [];
+      Object.keys(all).forEach(function (id) {
+        const one = all[id];
+        const zones = one.zones || [];
+        if (zones.length === 0) {
+          problems.push(one.name + " has no zones.");
+        }
+        zones.forEach(function (zone, index) {
+          const label = one.name + " — " +
+            (zone.name || "the zone in position " + (index + 1));
+          if (!zone.name) { problems.push(label + " has no name."); }
+          if (!zone.audio) { problems.push(label + " has no sound."); }
+          ["lat", "lon", "radius"].forEach(function (field) {
+            if (!isUsableNumber(zone[field])) {
+              problems.push(label + " has no usable " + field + ".");
+            }
+          });
+        });
+      });
+      return problems;
+    }
+
+    // What the table shows, in the same words the guide uses.
+    const COLUMNS = [
+      ["Zone", function (z) { return z.name; }],
+      ["Sound", function (z) { return String(z.audio || "").split("/").pop(); }],
+      ["Radius", function (z) { return z.radius + " m"; }],
+      ["Repeats", function (z) { return z.loop === true ? "yes" : "no"; }],
+      ["On leaving", function (z) {
+        return z.exit === "finish" ? "lets it finish" : "stops"; }],
+      ["Plays", function (z) {
+        return (typeof z.plays === "number") ? z.plays : "always"; }],
+      ["Fade in", function (z) { return (z.fadeIn || 0) + " s"; }],
+      ["Fade out", function (z) { return (z.fadeOut || 0) + " s"; }],
+      ["Position", function (z) { return z.lat + ", " + z.lon; }]
+    ];
+
+    function renderZones() {
+      const table = document.getElementById("zoneTable");
+      table.innerHTML = "";
+      const zones = (trailData[currentTrail].zones) || [];
+
+      const head = table.insertRow();
+      COLUMNS.forEach(function (column) {
+        const cell = document.createElement("th");
+        cell.textContent = column[0];
+        head.appendChild(cell);
+      });
+      zones.forEach(function (zone) {
+        const row = table.insertRow();
+        COLUMNS.forEach(function (column) {
+          row.insertCell().textContent = column[1](zone);
+        });
+      });
+
+      trailStatus.className = "good";
+      trailStatus.textContent = zones.length + " zone" +
+        (zones.length === 1 ? "" : "s") + " in " +
+        trailData[currentTrail].name + ".";
+      refreshSaveButton();
+    }
+
+    function refreshSaveButton() {
+      saveButton.disabled = !(ready && trailData && trailSha &&
+        whoBox.value.trim() && passwordBox.value);
+    }
+    [whoBox, passwordBox].forEach(function (box) {
+      box.addEventListener("input", refreshSaveButton);
+    });
+
+    function trailProblem(message) {
+      trailStatus.className = "bad";
+      trailStatus.textContent = message;
+    }
+
+    // Load the trail exactly as the walker's page does — as a script —
+    // so the tool can never disagree with the engine about what the
+    // file means. The time on the end defeats caching.
+    //
+    // Only ever once per page: trail.js declares a const, and loading
+    // it twice is an error. Anything needing fresh data reloads the
+    // page.
+    function loadTrail() {
+      const script = document.createElement("script");
+      script.src = "trail.js?t=" + Date.now();
+      script.onload = function () {
+        if (typeof trails === "undefined") {
+          trailProblem("The trail file loaded but had no trails in it.");
+          return;
+        }
+        trailData = trails;
+        Object.keys(trailData).forEach(function (id) {
+          const option = document.createElement("option");
+          option.value = id;
+          option.textContent = trailData[id].name;
+          chooser.appendChild(option);
+        });
+        currentTrail = chooser.value;
+        chooser.addEventListener("change", function () {
+          currentTrail = chooser.value;
+          renderZones();
+        });
+        renderZones();
+      };
+      script.onerror = function () {
+        trailProblem("Could not load the trail. Check you are online " +
+          "and reload the page.");
+      };
+      document.head.appendChild(script);
+    }
+
+    // Which version of the file this page is looking at. The repo is
+    // public, so this needs no password. Saving sends it back, and
+    // GitHub refuses if someone else has saved in the meantime — which
+    // is the only thing standing between two curators and one of them
+    // losing their work.
+    function loadTrailVersion() {
+      fetch("https://api.github.com/repos/ralph-hawkins/mixtape/contents/" +
+            "trail.js?ref=main", { cache: "no-store" })
+        .then(function (response) {
+          return response.ok ? response.json() : null;
+        })
+        .then(function (info) {
+          trailSha = info ? info.sha : null;
+          if (!trailSha) {
+            trailProblem("Could not tell which version of the trail " +
+              "this is, so saving is switched off. Reload the page.");
+          }
+          refreshSaveButton();
+        })
+        .catch(function () {
+          trailProblem("Could not reach GitHub to check the trail " +
+            "version, so saving is switched off. Reload the page.");
+        });
+    }
+
+    saveButton.addEventListener("click", async function () {
+      const problems = trailProblems(trailData);
+      if (problems.length > 0) {
+        trailResult.hidden = false;
+        trailResult.className = "bad";
+        trailResult.textContent = "Not saved. " + problems.join(" ");
+        return;
+      }
+
+      saveButton.disabled = true;
+      trailResult.hidden = false;
+      trailResult.className = "busy";
+      trailResult.textContent = "Saving the trail…";
+
+      let response, answer;
+      try {
+        response = await fetch(SAVE_SERVICE.replace(/\/+$/, "") + "/trail", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            password: passwordBox.value,
+            who: whoBox.value,
+            content: trailsToFile(trailData),
+            baseSha: trailSha
+          })
+        });
+        answer = await response.json();
+      } catch (error) {
+        trailResult.className = "bad";
+        trailResult.textContent = "Could not reach the save service. " +
+          "Check you are online, then try again.";
+        refreshSaveButton();
+        return;
+      }
+
+      if (!response.ok) {
+        trailResult.className = "bad";
+        trailResult.textContent = answer.error || "That did not work.";
+        refreshSaveButton();
+        return;
+      }
+
+      trailResult.className = "good";
+      trailResult.textContent = "Trail saved. It will be live in about " +
+        "a minute.";
+      if (answer.warning) {
+        const notice = document.getElementById("warning");
+        notice.hidden = false;
+        notice.textContent = answer.warning;
+      }
+      // The file just changed, so the version this page holds is stale.
+      // Saving again without a fresh one would be refused.
+      loadTrailVersion();
+    });
+
+    loadTrail();
+    loadTrailVersion();
   </script>
 
 </body>
