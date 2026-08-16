@@ -20,7 +20,9 @@
 
     <div class="summary" id="summary"></div>
 
-    <a class="button" id="done" href="#">Save zone</a>
+    <button id="done">Save zone</button>
+    <div id="result" hidden></div>
+
     <button class="danger" id="remove">Remove this zone</button>
   </div>
 
@@ -69,7 +71,6 @@
 
       const backTo = "trail.html?trail=" + encodeURIComponent(id);
       document.getElementById("back").href = backTo;
-      document.getElementById("done").href = backTo;
       document.getElementById("title").textContent =
         zone.name || "A new zone";
       document.title = (zone.name || "The zone") + " — Mixtape";
@@ -120,6 +121,49 @@
       draw();
     }, function (message) {
       Curate.showProblems(problems, [{ says: message }]);
+    });
+
+    // Saving here saves the whole trail, because that is the only thing
+    // the repository holds — one file. So a zone somewhere else being
+    // unfinished will stop this, which is why every problem listed is a
+    // link straight to the question at fault.
+    const result = document.getElementById("result");
+    document.getElementById("done").addEventListener("click", function () {
+      const button = document.getElementById("done");
+      button.disabled = true;
+      problems.hidden = true;
+      result.hidden = false;
+      result.className = "working";
+      result.textContent = "Saving…";
+
+      Curate.save(function (answer) {
+        button.disabled = false;
+        if (answer.problems || answer.error) {
+          result.hidden = true;
+          Curate.showProblems(problems,
+            answer.problems || [{ says: answer.error }]);
+          if (answer.conflict) { Curate.offerDiscard(problems); }
+          return;
+        }
+
+        result.className = "panel";
+        result.innerHTML = "";
+        const heading = document.createElement("h1");
+        heading.textContent = "Saved";
+        const line = document.createElement("p");
+        line.textContent = "This zone is on the trail. It will be live " +
+          "in about a minute.";
+        result.appendChild(heading);
+        result.appendChild(line);
+
+        if (answer.warning) {
+          const notice = document.createElement("p");
+          notice.className = "notice";
+          notice.textContent = answer.warning;
+          result.parentNode.insertBefore(notice, result.nextSibling);
+        }
+        result.scrollIntoView();
+      });
     });
 
     document.getElementById("remove").addEventListener("click", function () {

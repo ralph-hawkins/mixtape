@@ -119,24 +119,7 @@
         if (answer.error) {
           result.hidden = true;
           Curate.showProblems(problems, [{ says: answer.error }]);
-          // Somebody else saved first. Retrying can never work — this
-          // browser is still holding the older version — so offer the
-          // only thing that does: throw this copy away and start from
-          // theirs. Said plainly, because it does mean losing changes.
-          if (answer.conflict) {
-            const escape = document.createElement("button");
-            escape.className = "danger";
-            escape.textContent = "Discard my changes and get the latest";
-            escape.addEventListener("click", function () {
-              const sure = window.confirm(
-                "Discard your unsaved changes to this trail and take " +
-                "whatever the other person saved?");
-              if (!sure) { return; }
-              Curate.discard();
-              location.reload();
-            });
-            problems.appendChild(escape);
-          }
+          if (answer.conflict) { Curate.offerDiscard(problems); }
           return;
         }
         problems.hidden = true;

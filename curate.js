@@ -291,6 +291,24 @@ const Curate = (function () {
   }
 
 
+  // Somebody else saved first. Retrying can never work — this browser
+  // is still holding the older version — so offer the only thing that
+  // does. Shared, because more than one page can save now.
+  function offerDiscard(into) {
+    const escape = document.createElement("button");
+    escape.className = "danger";
+    escape.textContent = "Discard my changes and get the latest";
+    escape.addEventListener("click", function () {
+      const sure = window.confirm(
+        "Discard your unsaved changes and take whatever the other " +
+        "person saved?");
+      if (!sure) { return; }
+      discard();
+      location.reload();
+    });
+    into.appendChild(escape);
+  }
+
   // -------------------------------------------------------------------
   // A quiet strip at the top of every page while work is unsaved, so
   // nobody closes the tab thinking it went in.
@@ -407,5 +425,5 @@ const Curate = (function () {
   return { who, password, signIn, signedIn, needsSignIn,
            start, trails: allTrails, update, changed, whatChanged, revert,
            discard, working, sounds, save, ask, go, showProblems,
-           showUnsavedBanner };
+           offerDiscard, showUnsavedBanner };
 })();
