@@ -1,0 +1,38 @@
+# How the save service gets deployed.
+#
+# Before this file, worker.js had to be copied by hand into the
+# Cloudflare dashboard every time it changed — which meant the running
+# service could quietly drift out of step with the code in this repo,
+# and nothing anywhere would say so. Now one command deploys exactly
+# what is committed here.
+#
+#   npx wrangler login     once, ever, to sign in
+#   npx wrangler deploy    every time worker.js changes
+#
+# This is a deploy tool, not a build step: nothing is compiled and the
+# site itself is still plain files. worker.js is uploaded as written.
+#
+# No secrets live here. GITHUB_TOKEN and CURATOR_PASSWORD are set in
+# the Cloudflare dashboard and survive every deploy untouched — this
+# file must never be given values for them.
+
+name = "mixtape-save"
+main = "worker.js"
+
+# Which version of the Workers runtime this code expects. Pinned, so a
+# future change at Cloudflare's end cannot alter how this behaves
+# without someone deliberately moving the date.
+compatibility_date = "2026-08-16"
+
+# Keep serving on mixtape-save.ralph-026.workers.dev, which is the
+# address curate.html points at.
+workers_dev = true
+
+# Do NOT give every past version its own public address.
+#
+# Cloudflare offers this by default, and it would be actively harmful
+# here: each old version would stay reachable forever, with the same
+# keys, still able to write to the repo. The version that silently
+# replaced sounds would still be out there doing it. A fix has to
+# actually retire what it fixes.
+preview_urls = false

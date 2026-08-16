@@ -5,3 +5,7 @@ CLAUDE.md
 
 # Finder metadata — never useful in a repo.
 .DS_Store
+
+# Wrangler's local working state — sign-in details and caches. Never
+# belongs in a public repo.
+.wrangler/
