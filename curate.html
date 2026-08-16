@@ -58,11 +58,9 @@
   <label for="who">Your name
     <span class="hint">— so the trail records who added what.</span>
   </label>
-  <input type="text" id="who" autocomplete="name" placeholder="Jamie">
+  <input type="text" id="who" autocomplete="name">
 
   <label for="password">Password
-    <span class="hint">— the one Ralph gave you. This device will
-    remember it.</span>
   </label>
   <input type="password" id="password" autocomplete="current-password">
 
@@ -193,10 +191,20 @@
         return;
       }
 
-      say("Added. It will be on the trail in about a minute.", "good");
+      // Report the name it was really saved under. A sound is never
+      // allowed to replace one already there, so it may have been given
+      // a number — and being told that is the difference between a
+      // tidy library and a mystery later on.
+      const savedName = answer.savedName || file.name;
+      say(answer.nameWasTaken
+        ? "Added as " + savedName + ", because a sound called " +
+          file.name + " was already there. It will be on the trail in " +
+          "about a minute."
+        : "Added. It will be on the trail in about a minute.", "good");
+
       document.getElementById("addedHeading").hidden = false;
       const line = document.createElement("li");
-      line.textContent = file.name;
+      line.textContent = savedName;
       addedList.appendChild(line);
 
       // Clear the picker so the same file cannot be added twice by

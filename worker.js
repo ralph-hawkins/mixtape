@@ -138,12 +138,65 @@ async function saveAudio(body, who, env, cors) {
     }, cors);
   }
 
-  return await commit(
-    "assets/audio/" + name,
-    base64,
-    who + " added the sound " + name,
-    env, cors
-  );
+  // Never replace a sound that is already there. Phone voice memos
+  // arrive with names like "New Recording 3.m4a", so two curators
+  // colliding is a matter of time — and a silently lost recording is
+  // far worse than an untidy file name.
+  const free = await freeAudioPath(name, env);
+  if (free.keyProblem) {
+    return reply(502, { error: keyProblem(free.keyProblem) }, cors);
+  }
+  if (free.failed) {
+    return reply(502, {
+      error: "Could not check the sounds already there (GitHub said " +
+             free.failed + "). Nothing has been changed."
+    }, cors);
+  }
+  if (free.tooMany) {
+    return reply(409, {
+      error: "There are already a lot of sounds called " + name +
+             ". Give this one its own name and try again."
+    }, cors);
+  }
+
+  const savedName = free.path.split("/").pop();
+  const message = (savedName === name)
+    ? who + " added the sound " + name
+    : who + " added the sound " + savedName + " (" + name +
+      " was already taken)";
+
+  return await putFile(free.path, base64, message, undefined, {
+    savedName: savedName,
+    // Told apart from a name merely tidied up, so the tool can explain
+    // the right thing. "Voice Memo 3.m4a" becoming "Voice-Memo-3.m4a"
+    // is not a clash and should not be described as one.
+    nameWasTaken: (savedName !== name)
+  }, env, cors);
+}
+
+// Walk up from "bass.m4a" through "bass-2.m4a", "bass-3.m4a" until a
+// name nobody is using turns up. Stops well short of the limit on how
+// many other services one request may call.
+async function freeAudioPath(name, env) {
+  const dot = name.lastIndexOf(".");
+  const stem = dot > 0 ? name.slice(0, dot) : name;
+  const extension = dot > 0 ? name.slice(dot) : "";
+
+  for (let n = 1; n <= 20; n++) {
+    const candidate = "assets/audio/" +
+      (n === 1 ? name : stem + "-" + n + extension);
+    const found = await lookUp(candidate, env);
+    if (found.status === 404) {
+      return { path: candidate };
+    }
+    if (found.status === 401 || found.status === 403) {
+      return { keyProblem: found.status };
+    }
+    if (found.status !== 200) {
+      return { failed: found.status };
+    }
+  }
+  return { tooMany: true };
 }
 
 // ---------------------------------------------------------------------
@@ -157,18 +210,55 @@ async function saveTrail(body, who, env, cors) {
   if (text.length > MAX_BYTES) {
     return reply(413, { error: "That trail is implausibly large." }, cors);
   }
-  return await commit(
-    "trail.js",
-    base64FromText(text),
-    who + " changed the trail",
-    env, cors
-  );
+  // The trail is the one file that SHOULD be replaced — that is what
+  // saving means. So it looks up the version it is replacing and hands
+  // that back to GitHub, which refuses if someone else has saved in the
+  // meantime rather than quietly burying their work.
+  const existing = await lookUp("trail.js", env);
+  if (existing.status === 401 || existing.status === 403) {
+    return reply(502, { error: keyProblem(existing.status) }, cors);
+  }
+  return await putFile("trail.js", base64FromText(text),
+    who + " changed the trail", existing.sha,
+    { savedName: "trail.js" }, env, cors);
 }
 
 // ---------------------------------------------------------------------
 // The one place that talks to GitHub
 // ---------------------------------------------------------------------
-async function commit(path, base64, message, env, cors) {
+function apiUrl(path) {
+  return "https://api.github.com/repos/" + REPO_OWNER + "/" +
+         REPO_NAME + "/contents/" + path;
+}
+
+function githubHeaders(env) {
+  return {
+    "Authorization": "Bearer " + env.GITHUB_TOKEN,
+    "Accept": "application/vnd.github+json",
+    "Content-Type": "application/json",
+    // GitHub refuses requests that do not say who is calling.
+    "User-Agent": "mixtape-curator-tool"
+  };
+}
+
+// Is anything at this path already? 404 means the name is free.
+async function lookUp(path, env) {
+  const response = await fetch(apiUrl(path) + "?ref=" + BRANCH, {
+    headers: githubHeaders(env)
+  });
+  if (response.status === 200) {
+    return { status: 200, sha: (await response.json()).sha };
+  }
+  return { status: response.status };
+}
+
+// The one place that writes anything.
+//
+// Pass a sha to replace a known version, or leave it out to create a
+// file that must not already exist — GitHub refuses a PUT with no sha
+// if something is there, which is the real safety net behind the name
+// search above.
+async function putFile(path, base64, message, sha, extra, env, cors) {
   // The allowlist, checked literally, immediately before use — not
   // where the path was built. This is the line that matters.
   const allowed = ALLOWED_PATHS.some(function (pattern) {
@@ -180,29 +270,9 @@ async function commit(path, base64, message, env, cors) {
     }, cors);
   }
 
-  const api = "https://api.github.com/repos/" + REPO_OWNER + "/" +
-              REPO_NAME + "/contents/" + path;
-  const headers = {
-    "Authorization": "Bearer " + env.GITHUB_TOKEN,
-    "Accept": "application/vnd.github+json",
-    "Content-Type": "application/json",
-    // GitHub refuses requests that do not say who is calling.
-    "User-Agent": "mixtape-curator-tool"
-  };
-
-  // Replacing a file needs the id of the version being replaced. A 404
-  // here simply means the file is new.
-  let sha;
-  const existing = await fetch(api + "?ref=" + BRANCH, { headers });
-  if (existing.status === 200) {
-    sha = (await existing.json()).sha;
-  } else if (existing.status === 401 || existing.status === 403) {
-    return reply(502, { error: keyProblem(existing.status) }, cors);
-  }
-
-  const put = await fetch(api, {
+  const put = await fetch(apiUrl(path), {
     method: "PUT",
-    headers,
+    headers: githubHeaders(env),
     body: JSON.stringify({
       message: message,
       content: base64,
@@ -212,11 +282,11 @@ async function commit(path, base64, message, env, cors) {
   });
 
   if (put.status === 200 || put.status === 201) {
-    return reply(200, {
+    return reply(200, Object.assign({
       ok: true,
       path: path,
       message: message
-    }, cors);
+    }, extra || {}), cors);
   }
   if (put.status === 401 || put.status === 403) {
     return reply(502, { error: keyProblem(put.status) }, cors);
