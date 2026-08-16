@@ -306,16 +306,30 @@
       }
     };
 
+    // What a setting means when it is simply not there. The engine
+    // already treats a missing one this way, so writing it down changes
+    // the file without changing a single thing a walker would hear.
+    const SAME_AS_ABSENT = {
+      loop: false, exit: "stop", plays: "always", fadeIn: 0, fadeOut: 0
+    };
+
     // What to write back into the zone. Most questions set one setting;
     // "where" sets two, because they are one answer.
     function apply(zone, answer) {
       if (field === "where") {
         zone.lat = answer.lat; zone.lon = answer.lon;
-      } else if (field === "sound") {
-        zone.audio = answer;
-      } else {
-        zone[field] = answer;
+        return;
       }
+      if (field === "sound") { zone.audio = answer; return; }
+
+      // Opening a question, changing nothing and pressing Continue
+      // must not count as a change. Without this, confirming "fade in:
+      // 0" on a zone that never had a fade would write it down, and the
+      // tool would then insist there was work to save.
+      const absentMeansThis = SAME_AS_ABSENT[field];
+      if (zone[field] === undefined && answer === absentMeansThis) { return; }
+
+      zone[field] = answer;
     }
 
     function backHere() {

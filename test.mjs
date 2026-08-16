@@ -381,6 +381,86 @@ for (const [search, expected] of [["", "One"], ["?trail=two", "Two"],
 }
 
 // =====================================================================
+section("Knowing whether there is anything to save");
+// The tool warns before you close a tab with unsaved work. It got this
+// wrong by tracking a flag that anything editing the trail switched on:
+// opening a question and confirming the same answer set it, and nothing
+// could ever clear it, so it nagged about work that did not exist.
+// It now asks the only question that matters — would saving write a
+// different file?
+// =====================================================================
+{
+  const shelf = () => {
+    const kept = new Map();
+    return { getItem: (k) => kept.has(k) ? kept.get(k) : null,
+             setItem: (k, v) => kept.set(k, String(v)),
+             removeItem: (k) => kept.delete(k) };
+  };
+  const nothing = () => ({ id: "", className: "", textContent: "",
+    hidden: false, firstChild: null, appendChild() {}, remove() {},
+    setAttribute() {}, scrollIntoView() {}, insertBefore() {} });
+  globalThis.localStorage = shelf();
+  globalThis.sessionStorage = shelf();
+  globalThis.document = { getElementById: () => null,
+    createElement: nothing, body: nothing() };
+  globalThis.window = { addEventListener() {} };
+
+  const curateSource = readFileSync(new URL("curate.js", import.meta.url), "utf8");
+  const Curate = new Function("trailsToFile", "trailProblems", "trailId",
+    curateSource + "; return Curate;")(trailsToFile, trailProblems, trailId);
+
+  const zone = { name: "West", lat: 51.4, lon: 0.01, radius: 40,
+    audio: "assets/audio/a.m4a" };
+  const loaded = { park: { name: "The Park", zones: [zone] } };
+  const asLoaded = trailsToFile(loaded);
+  sessionStorage.setItem("mixtape-working-copy-2", JSON.stringify(
+    { baseSha: "abc", trails: JSON.parse(JSON.stringify(loaded)), asLoaded }));
+
+  check("straight after loading, there is nothing to save", !Curate.changed());
+
+  Curate.update((t) => { t.park.name = "The Park"; });
+  check("setting a name to the name it already had is not a change",
+    !Curate.changed());
+
+  // The zone editor refuses to write a lever that was not there when
+  // the answer means the same as leaving it out — so opening a
+  // question and confirming it unchanged really is no change. That
+  // rule lives in zone-edit.html; this is the same rule, checked.
+  const ABSENT_MEANS = { loop: false, exit: "stop", plays: "always",
+    fadeIn: 0, fadeOut: 0 };
+  const confirmUnchanged = (zone, setting, answer) => {
+    if (zone[setting] === undefined && answer === ABSENT_MEANS[setting]) {
+      return;
+    }
+    zone[setting] = answer;
+  };
+  Curate.update((t) => confirmUnchanged(t.park.zones[0], "fadeIn", 0));
+  check("confirming a lever without touching it is not a change",
+    !Curate.changed());
+  Curate.update((t) => confirmUnchanged(t.park.zones[0], "exit", "stop"));
+  check("nor is confirming another one", !Curate.changed());
+  Curate.update((t) => confirmUnchanged(t.park.zones[0], "fadeIn", 4));
+  check("but actually setting one is", Curate.changed());
+  Curate.update((t) => { delete t.park.zones[0].fadeIn; });
+  check("and taking it away again leaves nothing to save", !Curate.changed());
+
+  Curate.update((t) => { t.park.name = "Somewhere else"; });
+  check("a real change is a change", Curate.changed());
+
+  Curate.update((t) => { t.park.name = "The Park"; });
+  check("undoing it by hand leaves nothing to save", !Curate.changed());
+
+  Curate.update((t) => { t.park.zones.push({ radius: 30 }); });
+  check("adding a zone is a change", Curate.changed());
+  Curate.update((t) => { t.park.zones.pop(); });
+  check("adding a zone then removing it again leaves no trace",
+    !Curate.changed());
+
+  Curate.discard();
+  check("with nothing stored, there is nothing to save", !Curate.changed());
+}
+
+// =====================================================================
 section("Naming a trail, and knowing when one is not finished");
 // =====================================================================
 for (const [name, expected] of [

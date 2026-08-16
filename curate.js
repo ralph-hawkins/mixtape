@@ -15,7 +15,10 @@ const Curate = (function () {
 
   const SAVE_SERVICE = "https://mixtape-save.ralph-026.workers.dev";
   const REPO = "ralph-hawkins/mixtape";
-  const WORKING = "mixtape-working-copy";
+  // Bumped when the shape of what is stored changes, so a copy left
+  // over from an older version of the tool is ignored rather than
+  // misread.
+  const WORKING = "mixtape-working-copy-2";
 
   // -------------------------------------------------------------------
   // Who is using it
@@ -61,29 +64,28 @@ const Curate = (function () {
     return copy ? copy.trails : {};
   }
 
-  // Change the trail and remember that it needs saving, in one move.
-  // Every page edits through here, so nothing can change the working
-  // copy without the unsaved warning appearing.
+  // Every page edits the trail through here.
   function update(change) {
     const copy = working();
     if (!copy) { return; }
     change(copy.trails);
-    copy.changed = true;
     putWorking(copy);
     showUnsavedBanner();
   }
 
+  // Is there anything to save?
+  //
+  // Worked out by asking what would actually be written and comparing
+  // it with what was loaded — NOT by a flag set whenever something
+  // edits the trail. A flag is wrong twice over: opening a question and
+  // confirming the same answer would set it, and once set nothing could
+  // clear it, so the tool nagged about unsaved work that did not exist.
+  // This way an edit that changes nothing is not a change, and adding a
+  // zone then removing it again leaves no trace.
   function changed() {
     const copy = working();
-    return !!(copy && copy.changed);
-  }
-
-  function markChanged() {
-    const copy = working();
-    if (!copy) { return; }
-    copy.changed = true;
-    putWorking(copy);
-    showUnsavedBanner();
+    if (!copy || typeof copy.asLoaded !== "string") { return false; }
+    return trailsToFile(copy.trails) !== copy.asLoaded;
   }
 
   // Throw the working copy away, so the next page starts from whatever
@@ -109,7 +111,9 @@ const Curate = (function () {
     function done() {
       waiting = waiting - 1;
       if (waiting > 0 || broken) { return; }
-      putWorking({ baseSha: sha, trails: loadedTrails, changed: false });
+      // Keep what the file said when it arrived, to compare against.
+      putWorking({ baseSha: sha, trails: loadedTrails,
+        asLoaded: trailsToFile(loadedTrails) });
       ready();
     }
     function giveUp(message) {
@@ -203,8 +207,13 @@ const Curate = (function () {
         // Saved, so this copy is now clean — and the version it is
         // based on has moved on.
         refreshVersion(function () {
+          // What was just saved is now what the file says, so there is
+          // nothing left to save until something else changes.
           const fresh = working();
-          if (fresh) { fresh.changed = false; putWorking(fresh); }
+          if (fresh) {
+            fresh.asLoaded = trailsToFile(fresh.trails);
+            putWorking(fresh);
+          }
           showUnsavedBanner();
           onDone({ saved: true, warning: answer.body.warning });
         });
@@ -277,7 +286,7 @@ const Curate = (function () {
   }
 
   return { who, password, signIn, signedIn, needsSignIn,
-           start, trails: allTrails, update, changed, markChanged,
+           start, trails: allTrails, update, changed,
            discard, working, sounds, save, ask, go, showProblems,
            showUnsavedBanner };
 })();
