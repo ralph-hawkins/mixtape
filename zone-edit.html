@@ -44,6 +44,9 @@
       label.setAttribute("for", "answer");
       label.textContent = question;
       box.appendChild(label);
+      // The browser tab, history and screen readers all announce this.
+      // Every question page saying "Zone setting" tells nobody which.
+      document.title = question + " — Mixtape";
       if (hint) {
         const note = document.createElement("p");
         note.className = "hint";
@@ -69,6 +72,7 @@
       legend.className = "question";
       legend.textContent = question;
       set.appendChild(legend);
+      document.title = question + " — Mixtape";
       if (hint) {
         const note = document.createElement("p");
         note.className = "hint";
@@ -114,7 +118,7 @@
         const input = textBox(zone.name);
         return function () {
           const value = input.value.trim();
-          return value ? { value: value } : { problem: "Enter a name" };
+          return value ? { value: value } : { problem: ZONE_FAULTS.name };
         };
       },
 
@@ -170,7 +174,7 @@
 
         return function () {
           const picked = read();
-          return picked ? { value: picked } : { problem: "Choose a sound" };
+          return picked ? { value: picked } : { problem: ZONE_FAULTS.sound };
         };
       },
 
@@ -215,7 +219,7 @@
           // two boxes work as well as a pair of plain numbers.
           const both = readPosition(lat.value + ", " + lon.value);
           if (!both) {
-            return { problem: "Enter a position — for example " +
+            return { problem: ZONE_FAULTS.where + " — for example " +
               "51.461620, 0.010941, or paste it straight from a map" };
           }
           return { value: both };
@@ -230,14 +234,14 @@
         input.min = 5; input.max = 500; input.step = 5;
         return function () {
           if (!isUsableNumber(input.value) || Number(input.value) < 1) {
-            return { problem: "Enter how many metres across the zone is" };
+            return { problem: ZONE_FAULTS.size + ", in metres" };
           }
           return { value: Number(input.value) };
         };
       },
 
       loop: function (zone) {
-        const read = choices("While someone stands in the zone", null, [
+        const read = choices("While a walker stands in the zone", null, [
           ["false", "Play once, then go quiet"],
           ["true", "Repeat for as long as they stay"]
         ], zone.loop === true);
@@ -245,7 +249,7 @@
       },
 
       exit: function (zone) {
-        const read = choices("When they walk out mid-sound", null, [
+        const read = choices("When a walker walks out mid-sound", null, [
           ["stop", "Go quiet"],
           ["finish", "Let it finish playing",
             "The sound keeps going until it ends naturally, even once " +

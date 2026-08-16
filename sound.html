@@ -18,6 +18,11 @@
     <p class="hint">A voice memo, or any sound file from this device.</p>
     <input type="file" id="file" accept="audio/*">
 
+    <label class="question" for="name">What is this sound called?</label>
+    <p class="hint">How you will recognise it when choosing a sound for a
+    zone. "Jimmy on the market" beats "New Recording 3".</p>
+    <input type="text" id="name" autocomplete="off">
+
     <button id="go">Add this sound</button>
 
     <div id="result" hidden></div>
@@ -33,7 +38,19 @@
     const problems = document.getElementById("problems");
     const result = document.getElementById("result");
     const fileBox = document.getElementById("file");
+    const nameBox = document.getElementById("name");
     const goButton = document.getElementById("go");
+
+    // Fill the name in from the file as soon as one is chosen, so
+    // Continue still works in a single tap. A recording made on a phone
+    // arrives called something nobody chose, but it is a better
+    // starting point than an empty box.
+    fileBox.addEventListener("change", function () {
+      const file = fileBox.files[0];
+      if (!file || nameBox.value.trim()) { return; }
+      const dot = file.name.lastIndexOf(".");
+      nameBox.value = (dot > 0 ? file.name.slice(0, dot) : file.name).trim();
+    });
 
     // Where the curator came from, so they can be put back there.
     const then = Curate.ask("then") || "trails.html";
@@ -60,8 +77,23 @@
 
     goButton.addEventListener("click", async function () {
       const file = fileBox.files[0];
-      if (!file) {
-        Curate.showProblems(problems, [{ says: "Choose a sound to add" }]);
+      const found = [];
+      if (!file) { found.push({ says: "Choose a sound to add" }); }
+      if (!nameBox.value.trim()) {
+        found.push({ says: "Enter a name for this sound" });
+      }
+      if (found.length > 0) {
+        Curate.showProblems(problems, found);
+        return;
+      }
+
+      // What it will be called in the trail. The file the curator picked
+      // only decides the file type.
+      const savedAs = soundFileName(nameBox.value, file.name);
+      if (!savedAs) {
+        Curate.showProblems(problems, [{ says: "That name needs some " +
+          "letters or numbers in it, and the file needs a file type " +
+          "such as .m4a" }]);
         return;
       }
 
@@ -89,7 +121,7 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             password: Curate.password(), who: Curate.who(),
-            name: file.name, contentBase64: base64
+            name: savedAs, contentBase64: base64
           })
         });
         answer = await response.json();
@@ -109,7 +141,7 @@
         return;
       }
 
-      const savedName = answer.savedName || file.name;
+      const savedName = answer.savedName || savedAs;
       result.className = "panel";
       result.innerHTML = "";
       const heading = document.createElement("h1");
@@ -119,7 +151,7 @@
       // replace one already there, so it may have been given a number.
       line.textContent = answer.nameWasTaken
         ? "Saved as " + savedName + ", because a sound called " +
-          file.name + " was already there."
+          savedAs + " was already there."
         : "Saved as " + savedName + ".";
       result.appendChild(heading);
       result.appendChild(line);
@@ -133,8 +165,9 @@
 
       goButton.hidden = true;
       fileBox.hidden = true;
-      document.querySelector("label.question").hidden = true;
-      document.querySelectorAll(".hint").forEach(function (h) { h.hidden = true; });
+      nameBox.hidden = true;
+      document.querySelectorAll("label.question, .hint")
+        .forEach(function (bit) { bit.hidden = true; });
       document.getElementById("afterwards").hidden = false;
     });
 

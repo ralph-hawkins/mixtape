@@ -20,7 +20,7 @@
 
     <div class="summary" id="summary"></div>
 
-    <a class="button" id="done" href="#">Done</a>
+    <a class="button" id="done" href="#">Finished with this zone</a>
     <button class="danger" id="remove">Remove this zone</button>
   </div>
 
@@ -35,14 +35,14 @@
     // "Plays once" rather than loop: false.
     const ROWS = [
       ["name", "Name", function (z) { return z.name; }],
-      ["sound", "Sound", function (z) {
+      ["sound", "Which sound plays", function (z) {
         return z.audio ? String(z.audio).split("/").pop() : ""; }],
       ["where", "Where it is", function (z) {
         return isUsableNumber(z.lat) && isUsableNumber(z.lon)
           ? z.lat + ", " + z.lon : ""; }],
-      ["size", "How big", function (z) {
+      ["size", "How big it is", function (z) {
         return isUsableNumber(z.radius) ? z.radius + " metres across" : ""; }],
-      ["loop", "While someone stands there", function (z) {
+      ["loop", "While a walker stands there", function (z) {
         return z.loop === true
           ? "The sound repeats" : "The sound plays once, then goes quiet"; }],
       ["exit", "When they walk out", function (z) {

@@ -18,8 +18,9 @@
     <p><a id="rename" href="#">Change the name</a></p>
 
     <h2>Zones</h2>
-    <p class="hint" id="zonesNote">Each zone is a place with a sound.
-    Walk into it and the sound plays.</p>
+    <p class="hint" id="zonesNote">Each zone is a place with a sound. A
+    walker who steps inside it hears that sound. The order below does not
+    matter — a walker can reach them in any order.</p>
 
     <ul class="cards" id="zones"></ul>
     <button class="secondary" id="addZone">Add a zone</button>
@@ -56,7 +57,9 @@
       zoneList.innerHTML = "";
       document.getElementById("zonesNote").textContent = zones.length === 0
         ? "No zones yet. A trail needs at least one before it can be saved."
-        : "Each zone is a place with a sound. Walk into it and the sound plays.";
+        : "Each zone is a place with a sound. A walker who steps inside it " +
+          "hears that sound. The order below does not matter — a walker " +
+          "can reach them in any order.";
 
       zones.forEach(function (zone, index) {
         const wrong = zoneProblems(zone);
@@ -123,12 +126,11 @@
           if (answer.conflict) {
             const escape = document.createElement("button");
             escape.className = "danger";
-            escape.textContent = "Throw away my changes and get the latest";
+            escape.textContent = "Discard my changes and get the latest";
             escape.addEventListener("click", function () {
               const sure = window.confirm(
-                "Your unsaved changes to this trail will be lost, and " +
-                "you will get whatever the other person saved.\n\n" +
-                "Carry on?");
+                "Discard your unsaved changes to this trail and take " +
+                "whatever the other person saved?");
               if (!sure) { return; }
               Curate.discard();
               location.reload();

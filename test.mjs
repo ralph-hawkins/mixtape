@@ -29,7 +29,8 @@ const workerSource = readFileSync(new URL("worker.js", import.meta.url), "utf8")
 // very code the tool runs, not a copy of it.
 const require = createRequire(import.meta.url);
 const { trailsToFile, ZONE_FIELDS, isUsableNumber, trailId,
-        zoneProblems, trailProblems, readPosition } = require("./trail-file.js");
+        zoneProblems, trailProblems, readPosition,
+        soundFileName, ZONE_FAULTS } = require("./trail-file.js");
 
 // Load worker.js as a module without renaming it or adding a
 // package.json, by handing its text straight to the importer.
@@ -602,6 +603,41 @@ check("a trail with no zones is caught",
   trailProblems({ t: { name: "Empty", zones: [] } }).length === 1);
 check("a finished trail passes",
   trailProblems({ t: { name: "Fine", zones: [goodZone] } }).length === 0);
+
+// A problem has to carry enough to link straight to the question at
+// fault. A list of faults you then have to go and find is half a
+// message.
+{
+  const found = trailProblems({ park: { name: "The Park",
+    zones: [{ name: "West", lat: 51.4, lon: 0.01, radius: 40 }] } });
+  check("a problem says which trail, which zone and which question",
+    found.length === 1 && found[0].trail === "park" &&
+    found[0].zone === 0 && found[0].field === "sound",
+    JSON.stringify(found[0]));
+}
+
+// One fault, one wording. The questions and the validator used to
+// describe a missing name two different ways depending on where you
+// met it.
+check("the same fault is worded the same everywhere",
+  zoneProblems({}).find((p) => p.field === "name").says === ZONE_FAULTS.name);
+
+for (const [name, original, expected] of [
+  ["Jimmy on the market", "New Recording 3.m4a", "jimmy-on-the-market.m4a"],
+  ["The bells", "bells.MP3", "the-bells.mp3"],
+  ["  spaced   out  ", "a.wav", "spaced-out.wav"],
+  ["Already-fine", "a.m4a", "already-fine.m4a"],
+  ["!!!", "a.m4a", ""],
+  ["", "a.m4a", ""],
+  ["No file type", "nodot", ""],
+  ["x".repeat(80), "a.m4a", "x".repeat(40) + ".m4a"]]) {
+  check(`"${name.slice(0, 22)}" + ${original} becomes ` +
+    (expected ? `"${expected.slice(0, 26)}"` : "refused"),
+    soundFileName(name, original) === expected,
+    soundFileName(name, original));
+}
+check("the file type is kept, not the name the phone chose",
+  soundFileName("Jimmy", "New Recording 3.m4a").endsWith(".m4a"));
 
 // =====================================================================
 console.log("\n" + (failures === 0

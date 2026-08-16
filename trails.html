@@ -18,12 +18,7 @@
 
     <ul class="cards" id="list"></ul>
 
-    <a class="button secondary" href="trail-name.html">Add a new trail</a>
-
-    <p class="inset" id="unsavedNote" hidden>
-      You have changes that have not been saved. Open the trail you were
-      working on and save it.
-    </p>
+    <a class="button secondary" href="trail-name.html">Add a trail</a>
   </div>
 
   <script src="trail-file.js"></script>
@@ -39,7 +34,6 @@
       status.textContent = ids.length === 0
         ? "There are no trails yet."
         : "Choose a trail to work on.";
-      document.getElementById("unsavedNote").hidden = !Curate.changed();
 
       ids.forEach(function (id) {
         const trail = all[id];

@@ -172,25 +172,52 @@ function trailId(name) {
     .slice(0, 40);
 }
 
+// Turn what a curator calls a sound into a filename, keeping the file
+// type from whatever they picked.
+//
+// Without this, a recording made on a phone is called "New Recording
+// 3.m4a" for the rest of its life, and the list of sounds tells nobody
+// anything. Uses the same tidying as trail names, so both behave the
+// same way.
+function soundFileName(name, original) {
+  const dot = String(original || "").lastIndexOf(".");
+  const extension = dot > 0
+    ? String(original).slice(dot + 1).replace(/[^A-Za-z0-9]/g, "") : "";
+  const stem = trailId(name);
+  if (!stem || !extension) { return ""; }
+  return stem + "." + extension.toLowerCase();
+}
+
 // What is wrong with one zone, in plain words. An empty list means it
 // is fine.
 //
 // This is the check that stops the tool writing a trail the walker's
 // page could not read. Better caught here, where somebody can fix it,
 // than in a park.
+//
+// These are also the words the questions themselves use when an answer
+// is missing, so the same fault is never described two different ways
+// depending on where you meet it.
+const ZONE_FAULTS = {
+  name: "Enter a name for this zone",
+  sound: "Choose a sound for this zone",
+  where: "Enter where this zone is",
+  size: "Enter how big this zone is"
+};
+
 function zoneProblems(zone) {
   const problems = [];
   if (!zone.name || !String(zone.name).trim()) {
-    problems.push({ field: "name", says: "Give this zone a name" });
+    problems.push({ field: "name", says: ZONE_FAULTS.name });
   }
   if (!zone.audio) {
-    problems.push({ field: "sound", says: "Choose a sound for this zone" });
+    problems.push({ field: "sound", says: ZONE_FAULTS.sound });
   }
   if (!isUsableNumber(zone.lat) || !isUsableNumber(zone.lon)) {
-    problems.push({ field: "where", says: "Say where this zone is" });
+    problems.push({ field: "where", says: ZONE_FAULTS.where });
   }
   if (!isUsableNumber(zone.radius)) {
-    problems.push({ field: "size", says: "Say how big this zone is" });
+    problems.push({ field: "size", says: ZONE_FAULTS.size });
   }
   return problems;
 }
@@ -212,7 +239,10 @@ function trailProblems(all) {
     zones.forEach(function (zone, index) {
       zoneProblems(zone).forEach(function (problem) {
         problems.push({
-          trail: id, zone: index,
+          // The field travels with it so the page can offer a link
+          // straight to the question, rather than leaving somebody to
+          // hunt through eight zones for the one that is wrong.
+          trail: id, zone: index, field: problem.field,
           says: (zone.name || "Zone " + (index + 1)) + " in " + one.name +
                 ": " + problem.says.toLowerCase()
         });
@@ -228,5 +258,5 @@ function trailProblems(all) {
 if (typeof module !== "undefined" && module.exports) {
   module.exports = { ZONE_FIELDS, trailsToFile, zoneToPlain,
     isUsableNumber, trailId, zoneProblems, trailProblems,
-    readPosition };
+    readPosition, soundFileName, ZONE_FAULTS };
 }

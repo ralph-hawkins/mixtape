@@ -318,7 +318,7 @@ const Curate = (function () {
     undo.addEventListener("click", function (event) {
       event.preventDefault();
       const sure = window.confirm(
-        "Put everything back the way it was when you opened the tool?\n\n" +
+        "Discard everything you have changed since opening the tool?\n\n" +
         "Anything you have changed since then will be lost.");
       if (!sure) { return; }
       revert();
@@ -383,7 +383,20 @@ const Curate = (function () {
     const list = document.createElement("ul");
     problems.forEach(function (problem) {
       const item = document.createElement("li");
-      item.textContent = problem.says || problem;
+      const words = problem.says || problem;
+      // Where we know which zone and which question is at fault, take
+      // them there. A list of faults you then have to go and find is
+      // only half a message.
+      if (problem && problem.trail && problem.field !== undefined &&
+          problem.zone !== undefined) {
+        const link = document.createElement("a");
+        link.href = "zone-edit.html?trail=" + encodeURIComponent(problem.trail) +
+          "&zone=" + problem.zone + "&field=" + problem.field;
+        link.textContent = words;
+        item.appendChild(link);
+      } else {
+        item.textContent = words;
+      }
       list.appendChild(item);
     });
     into.appendChild(heading);
