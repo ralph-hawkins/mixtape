@@ -310,6 +310,28 @@ const Curate = (function () {
     if (changed()) { event.preventDefault(); event.returnValue = ""; }
   });
 
+  // Running from a copy on your own machine is useful — no waiting for
+  // the site to rebuild — but it is only the PAGES that are local. The
+  // trail is read from the file next to them, while saving writes to
+  // the real repository. Get those out of step and saving would put an
+  // old trail over a newer one, so say so plainly.
+  function warnIfLocal() {
+    if (!/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) { return; }
+    if (document.getElementById("localNotice")) { return; }
+    const strip = document.createElement("div");
+    strip.id = "localNotice";
+    strip.className = "unsaved";
+    strip.textContent = "Running from your own machine. The trail shown " +
+      "is the file on this computer, but saving writes to the live one — " +
+      "so run git pull first.";
+    document.body.insertBefore(strip, document.body.firstChild);
+  }
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", warnIfLocal);
+  } else {
+    warnIfLocal();
+  }
+
   // -------------------------------------------------------------------
   // Odds and ends
   // -------------------------------------------------------------------
