@@ -39,11 +39,16 @@
     // Small builders, so each question below stays one short block.
     // ----------------------------------------------------------------
     function ask(question, hint) {
+      // A real heading holding a real label: the question is both, so
+      // it reads once and can still be found by anyone moving through
+      // the page by heading.
+      const heading = document.createElement("h1");
+      heading.className = "question";
       const label = document.createElement("label");
-      label.className = "question";
       label.setAttribute("for", "answer");
       label.textContent = question;
-      box.appendChild(label);
+      heading.appendChild(label);
+      box.appendChild(heading);
       // The browser tab, history and screen readers all announce this.
       // Every question page saying "Zone setting" tells nobody which.
       document.title = question + " — Mixtape";
@@ -68,9 +73,13 @@
     // them rather than floating above unattached.
     function choices(question, hint, options, current) {
       const set = document.createElement("fieldset");
+      // Same again for a set of choices: the legend names the group,
+      // and the heading inside it is what gets found.
       const legend = document.createElement("legend");
       legend.className = "question";
-      legend.textContent = question;
+      const heading = document.createElement("h1");
+      heading.textContent = question;
+      legend.appendChild(heading);
       set.appendChild(legend);
       document.title = question + " — Mixtape";
       if (hint) {

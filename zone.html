@@ -21,7 +21,7 @@
     <div class="summary" id="summary"></div>
 
     <button id="done">Save zone</button>
-    <div id="result" hidden></div>
+    <div id="result" role="status" hidden></div>
 
     <button class="danger" id="remove">Remove this zone</button>
   </div>
@@ -148,7 +148,7 @@
 
         result.className = "panel";
         result.innerHTML = "";
-        const heading = document.createElement("h1");
+        const heading = document.createElement("h2");
         heading.textContent = "Saved";
         const line = document.createElement("p");
         line.textContent = "This zone is on the trail. It will be live " +

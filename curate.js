@@ -333,7 +333,7 @@ const Curate = (function () {
     const named = whatChanged();
     const strip = document.createElement("div");
     strip.id = "unsavedBanner";
-    strip.className = "unsaved";
+    strip.className = "notice strip";
 
     const says = document.createElement("span");
     says.textContent = named.length
@@ -379,7 +379,7 @@ const Curate = (function () {
     if (document.getElementById("localNotice")) { return; }
     const strip = document.createElement("div");
     strip.id = "localNotice";
-    strip.className = "unsaved";
+    strip.className = "notice strip";
     strip.textContent = "Running from your own machine. The trail shown " +
       "is the file on this computer, but saving writes to the live one — " +
       "so run git pull first.";
@@ -431,6 +431,11 @@ const Curate = (function () {
     });
     into.appendChild(heading);
     into.appendChild(list);
+    // Take them to it, not just near it. Somebody using a screen reader
+    // is otherwise left at the bottom of a form with no idea anything
+    // was said.
+    into.setAttribute("tabindex", "-1");
+    into.focus();
     into.scrollIntoView();
   }
 

@@ -3,223 +3,363 @@
 
    Built on the GOV.UK Design System's patterns — one thing per page,
    the question as the heading, hint text under it, one obvious green
-   button, errors summarised at the top and repeated beside the field.
-   Those patterns are open source and have been tested on more people
-   than this project will ever reach, so there is no sense inventing
-   our own.
+   button, problems listed at the top. Those patterns have been tested
+   on more people than this project will ever reach.
 
    The look is borrowed, the identity is not: no crown, no GOV.UK
    wording, and the system font rather than GDS Transport, which is
    licensed for government services only. This is Mixtape's tool and
    should never be mistaken for a government one.
 
-   Everything is sized for a thumb. Curators record sounds on a phone
-   and will usually be standing up somewhere when they use this.
+   ---------------------------------------------------------------------
+   THREE RULES THAT KEEP THIS OUT OF TROUBLE
+
+   1. Layers, in order. Anything in `components` beats
+      anything in `base`, whatever the selectors look like. So a button
+      never has to out-argue a link.
+
+      This is not tidiness for its own sake. Styling `a:visited` the
+      ordinary way quietly broke every link that looks like a button:
+      `a:visited` outweighs `.button`, so the text turned purple on
+      green — but only once somebody had used the tool, so it went
+      unnoticed for a long time. Layers make that impossible rather than
+      merely fixed.
+
+   2. Anything you can interact with states all of its states together —
+      link, visited, hover, active — in one block. Half the faults found
+      in this file were a state nobody had thought about.
+
+   3. Focus is a layer of its own, and it is last. Components would
+      otherwise beat it by the very rule that makes rule 1 work: a
+      button's green background would win over the focus marker and
+      quietly weaken it. Nothing outside that layer may set a focus
+      style.
+
+   ---------------------------------------------------------------------
+   THE COST OF LAYERS, SAID OUT LOUD
+
+   A browser that does not understand `@layer` throws away everything
+   inside it — which here is the whole file. That is a cliff, not a
+   slope: the pages would arrive with no styling at all.
+
+   Accepted, for two reasons. Layers have worked everywhere since early
+   2022, including iOS Safari 15.4. And the pages are built to survive
+   it: proper headings, labels tied to their boxes, real buttons and
+   ordinary links. Unstyled they are plain and ugly, and every one of
+   them still works — a curator could still add a sound and save a
+   trail.
+
+   If that ever stops being an acceptable trade, the same protection can
+   be had by wrapping the base rules in :where() instead, which degrades
+   one rule at a time rather than all of them.
    ===================================================================== */
 
-:root {
-  --ink: #0b0c0c;
-  --grey: #505a5f;
-  --line: #b1b4b6;
-  --green: #00703c;
-  --green-dark: #002d18;
-  --red: #d4351c;
-  --blue: #1d70b8;
-  --focus: #ffdd00;
-  --light: #f3f2f1;
+@layer base, components, focus;
+
+/* =====================================================================
+   BASE — plain elements, deliberately easy to override
+   ===================================================================== */
+@layer base {
+
+  :root {
+    --ink: #0b0c0c;          /* text */
+    --grey: #505a5f;         /* hints and quiet notes */
+    --line: #b1b4b6;         /* rules and borders */
+    --light: #f3f2f1;        /* cards, quiet buttons */
+    --green: #00703c;        /* the main action */
+    --green-dark: #002d18;
+    --red: #d4351c;          /* problems, removing things */
+    --red-dark: #55150b;
+    --blue: #1d70b8;         /* links */
+    --amber: #d97706;        /* notices */
+    --amber-pale: #fff6e5;
+    --focus: #ffdd00;        /* where you are */
+
+    --gap: 1rem;
+    --reading-width: 36em;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; }
+
+  body {
+    font-family: system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+    /* 19px, and every control inherits it. Anything under 16px makes an
+       iPhone zoom the page in the moment a box is tapped. */
+    font-size: 19px;
+    line-height: 1.35;
+    color: var(--ink);
+    background: #fff;
+    margin: 0;
+    /* A sound filename can be 44 characters with no spaces, and the link
+       to a saved trail is longer. A narrow phone fits about 20. Without
+       this they push the whole page sideways. Only breaks a word that
+       would not otherwise fit. */
+    overflow-wrap: break-word;
+  }
+
+  h1 { font-size: 1.8rem; line-height: 1.1; margin: 0.6em 0 0.7em; }
+  h2 { font-size: 1.3rem; line-height: 1.2; margin: 1.6em 0 0.6em; }
+  h3 { font-size: 1.05rem; margin: 1.2em 0 0.4em; }
+  p, ul { margin: 0 0 var(--gap); }
+
+  /* Wrapped in :where() so these carry no weight at all. Anything that
+     wants a different colour simply says so and wins, which is the whole
+     point of rule 1 at the top. */
+  a:where(:link, :visited) { color: var(--blue); }
+  a:where(:hover) { color: #003078; }
+
+  /* Controls inherit the page's typeface and size rather than the
+     browser's, which is smaller and, on a phone, causes zoom. */
+  input, button, select, textarea { font: inherit; color: inherit; }
+
+  input[type=text], input[type=password], input[type=number],
+  input[type=file] {
+    width: 100%;
+    padding: 0.5em;
+    border: 2px solid var(--ink);
+    border-radius: 0;
+    background: #fff;
+    margin-bottom: 0.4em;
+  }
+
+  label { display: block; font-weight: 700; margin: 1.2em 0 0.3em; }
+  fieldset { border: 0; padding: 0; margin: 0; }
+  audio { width: 100%; margin: 0.4em 0 0.8em; }
+
 }
 
-* { box-sizing: border-box; }
+/* =====================================================================
+   COMPONENTS — everything here beats everything above
+   ===================================================================== */
+@layer components {
 
-body {
-  font-family: system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
-  font-size: 19px; line-height: 1.32;
-  color: var(--ink); background: #fff;
-  margin: 0; padding: 0;
-  /* A sound filename can be 44 characters with no spaces in it, and the
-     link to a saved trail is longer still. A narrow phone fits about
-     20. Without this they push the whole page sideways. Only breaks a
-     word that would not otherwise fit. */
-  overflow-wrap: break-word;
+  .masthead {
+    background: var(--ink);
+    color: #fff;
+    padding: 0.7em var(--gap);
+    font-weight: 700;
+  }
+
+  .page {
+    max-width: var(--reading-width);
+    margin: 0 auto;
+    padding: var(--gap) var(--gap) 4rem;
+  }
+
+  /* --- Getting back --------------------------------------------------- */
+
+  .back { display: inline-block; margin: 0.8em 0 0; font-size: 0.85em; }
+  .back:where(:link, :visited) { color: var(--ink); }
+  .back::before { content: "\2039  "; }
+
+  /* --- Asking one thing ----------------------------------------------- */
+
+  /* On a page that asks one thing, the question IS the heading — so it
+     is never read out or skimmed twice.
+     It has to be a real <h1> as well as look like one, or somebody
+     moving through the page by heading finds nothing at all. So the
+     markup nests them (an h1 holding a label, or a legend holding an
+     h1) and this flattens whichever one is on the inside. */
+  .question {
+    display: block;
+    font-size: 1.8rem;
+    font-weight: 700;
+    line-height: 1.1;
+    margin: 0.6em 0 0.3em;
+    padding: 0;
+  }
+  .question h1, .question label, .question legend {
+    font: inherit;
+    margin: 0;
+    padding: 0;
+    display: block;
+  }
+  .hint { color: var(--grey); margin: 0 0 0.6em; font-size: 0.95em; }
+
+  /* Two boxes that are really one answer. */
+  .pair { display: flex; gap: 0.6em; }
+  .pair input { flex: 1; min-width: 0; }
+
+  /* --- Choosing between a few things ----------------------------------- */
+
+  .choice {
+    display: block;
+    position: relative;
+    padding: 0.8em 0.8em 0.8em 3em;
+    margin-bottom: 0.6em;
+    background: var(--light);
+    border: 2px solid transparent;
+    cursor: pointer;
+  }
+  .choice input {
+    position: absolute;
+    left: 0.8em;
+    top: 1em;
+    width: 1.4em;
+    height: 1.4em;
+    margin: 0;
+  }
+  /* Chosen and focused have to look different from each other. */
+  .choice:has(input:checked) { border-color: var(--ink); background: #fff; }
+  .choice:has(input:focus-visible) {
+    border-color: var(--ink);
+    box-shadow: 0 0 0 4px var(--focus);
+  }
+  .choice .note {
+    display: block;
+    color: var(--grey);
+    font-size: 0.9em;
+    margin-top: 0.2em;
+  }
+
+  /* --- Buttons --------------------------------------------------------- */
+
+  /* A button and a link that looks like one are the same thing here, in
+     every state, so the two can never drift apart.
+     Focus is left alone on purpose: the focus layer has the last word,
+     and a colour set here would only fight it. */
+  .button, button {
+    display: block;
+    width: 100%;
+    text-align: center;
+    font-weight: 700;
+    padding: 0.65em 1em;
+    margin: 1.2em 0 0;
+    border: 2px solid transparent;
+    border-radius: 0;
+    cursor: pointer;
+    text-decoration: none;
+    background: var(--green);
+    box-shadow: 0 2px 0 var(--green-dark);
+  }
+  .button:where(:link, :visited, :hover, :active), button { color: #fff; }
+
+  /* Moved, not offset: `top` does nothing without a position, so this
+     used to lose its edge on press without ever going down, which read
+     as a flicker rather than a press. */
+  .button:active, button:active {
+    transform: translateY(2px);
+    box-shadow: none;
+  }
+  button[disabled] { opacity: 0.5; cursor: default; }
+
+  .button.secondary, button.secondary {
+    background: var(--light);
+    box-shadow: 0 2px 0 #929191;
+  }
+  .button.secondary:where(:link, :visited, :hover, :active),
+  button.secondary { color: var(--ink); }
+
+  .button.danger, button.danger {
+    background: var(--red);
+    box-shadow: 0 2px 0 var(--red-dark);
+  }
+  .button.danger:where(:link, :visited, :hover, :active),
+  button.danger { color: #fff; }
+
+  /* --- A list of things to pick ---------------------------------------- */
+
+  .cards { list-style: none; padding: 0; margin: var(--gap) 0 0; }
+  .cards li { margin-bottom: 0.6em; }
+  .cards a {
+    display: block;
+    padding: 0.9em 1em;
+    background: var(--light);
+    text-decoration: none;
+    border-left: 5px solid var(--ink);
+  }
+  .cards a:where(:link, :visited) { color: var(--ink); }
+  .cards a:where(:hover) { background: #e8e6e4; }
+  .cards a.incomplete { border-left-color: var(--red); }
+  .cards strong { display: block; font-size: 1.05em; }
+  .cards .note { color: var(--grey); font-size: 0.9em; }
+
+  /* --- What has been said so far ---------------------------------------- */
+
+  .summary { margin: var(--gap) 0 0; border-top: 1px solid var(--line); }
+  .summary .row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.3em 1em;
+    padding: 0.8em 0;
+    border-bottom: 1px solid var(--line);
+  }
+  .summary .key { font-weight: 700; flex: 1 1 8em; }
+  .summary .value { flex: 2 1 10em; }
+  .summary .missing { color: var(--red); font-weight: 700; }
+  .summary .change { flex: 0 0 auto; text-align: right; }
+  /* Padded so it is a thumb-sized target, not just a word. */
+  .summary .change a { display: inline-block; padding: 0.3em 0 0.3em 0.6em; }
+
+  /* --- Saying what happened ---------------------------------------------- */
+
+  .problem {
+    border: 5px solid var(--red);
+    padding: var(--gap);
+    margin: var(--gap) 0;
+  }
+  .problem h2 { margin-top: 0; font-size: 1.2rem; }
+  .problem ul { margin: 0; padding-left: 1.2em; }
+  .problem a:where(:link, :visited) { color: var(--red); }
+
+  .panel {
+    background: var(--green);
+    color: #fff;
+    padding: 1.4em var(--gap);
+    text-align: center;
+    margin: var(--gap) 0;
+  }
+  .panel h2 { margin: 0 0 0.3em; color: inherit; font-size: 1.5rem; }
+
+  .inset {
+    border-left: 5px solid var(--line);
+    padding: 0.2em 0 0.2em var(--gap);
+    margin: var(--gap) 0;
+    color: var(--grey);
+  }
+
+  /* One look for anything worth noticing that is not a fault.
+     `.strip` is the same thing spanning the page, under the masthead. */
+  .notice {
+    background: var(--amber-pale);
+    border-left: 5px solid var(--amber);
+    padding: 0.9em var(--gap);
+    margin: var(--gap) 0;
+  }
+  .notice.strip {
+    border-left: 0;
+    border-bottom: 1px solid var(--amber);
+    margin: 0;
+    padding: 0.6em var(--gap);
+    font-size: 0.9em;
+  }
+
+  .working { color: var(--grey); }
+
+  /* Notes that only take up room when they have something to say. */
+  .when-needed:empty { display: none; }
 }
 
-/* A masthead, so it is always obvious which tool this is. */
-.masthead {
-  background: var(--ink); color: #fff;
-  padding: 0.7em 1em; font-weight: 700;
+/* =====================================================================
+   FOCUS — last, so nothing can weaken it
+
+   One marker for everything you can reach. :focus-visible rather than
+   :focus, so it appears for a keyboard and not on every tap; a ring
+   that shows up on touch reads as a fault.
+
+   Dark on yellow, never the other way round, and it has the last word
+   over any background a component sets.
+   ===================================================================== */
+@layer focus {
+  :focus-visible {
+    outline: 3px solid var(--focus);
+    outline-offset: 0;
+    box-shadow: 0 0 0 5px var(--ink);
+    color: var(--ink);
+    background-color: var(--focus);
+    text-decoration: none;
+  }
+  /* A text box keeps its white background, or what is being typed
+     becomes unreadable against the marker. */
+  input:focus-visible { background: #fff; }
 }
-.page { max-width: 36em; margin: 0 auto; padding: 1em 1em 4em; }
-
-h1 { font-size: 1.8em; line-height: 1.1; margin: 0.6em 0 0.7em; }
-h2 { font-size: 1.3em; line-height: 1.2; margin: 1.6em 0 0.6em; }
-h3 { font-size: 1.05em; margin: 1.2em 0 0.4em; }
-p { margin: 0 0 1em; }
-
-a { color: var(--blue); }
-a:visited { color: #4c2c92; }
-a:hover { color: #003078; }
-
-/* Everything focusable gets the same loud yellow marker. Losing track
-   of where you are on a form is miserable on a phone. */
-a:focus, button:focus, input:focus {
-  outline: 3px solid transparent;
-  background-color: var(--focus);
-  box-shadow: 0 -2px var(--focus), 0 4px var(--ink);
-  color: var(--ink);
-  text-decoration: none;
-}
-input:focus { box-shadow: inset 0 0 0 2px; background: #fff; }
-
-/* --- Getting back ---------------------------------------------------- */
-
-.back {
-  display: inline-block; margin: 0.8em 0 0;
-  color: var(--ink); font-size: 0.85em;
-}
-.back::before { content: "\2039  "; }
-
-/* --- Asking a question ----------------------------------------------- */
-
-/* On a page that asks one thing, the question IS the heading — so it
-   is never read out or skimmed twice. */
-label.question, legend.question {
-  display: block; font-size: 1.8em; font-weight: 700;
-  line-height: 1.1; margin: 0.6em 0 0.3em; padding: 0;
-}
-.hint { color: var(--grey); margin: 0 0 0.6em; font-size: 0.95em; }
-
-fieldset { border: 0; padding: 0; margin: 0; }
-
-input[type=text], input[type=password], input[type=number],
-input[type=file] {
-  font-family: inherit; font-size: 1em;
-  width: 100%; padding: 0.5em;
-  border: 2px solid var(--ink); border-radius: 0;
-  background: #fff; color: var(--ink);
-  margin-bottom: 0.4em;
-}
-/* Two boxes that are really one answer. */
-.pair { display: flex; gap: 0.6em; }
-.pair input { flex: 1; min-width: 0; }
-
-/* --- Choosing from a few options ------------------------------------- */
-
-.choice {
-  display: block; position: relative;
-  padding: 0.8em 0.8em 0.8em 3em;
-  margin-bottom: 0.6em; background: var(--light);
-  border: 2px solid transparent; cursor: pointer;
-}
-.choice input { position: absolute; left: 0.8em; top: 1em;
-                width: 1.4em; height: 1.4em; margin: 0; }
-.choice:has(input:checked) { border-color: var(--ink); background: #fff; }
-/* Chosen and focused are different things and have to look different.
-   Without this the only sign of focus was on the radio itself, which
-   browsers draw faintly and which is easy to lose on a phone. */
-.choice:has(input:focus) {
-  border-color: var(--ink); box-shadow: 0 0 0 4px var(--focus);
-}
-.choice .note { display: block; color: var(--grey); font-size: 0.9em;
-                margin-top: 0.2em; }
-
-/* --- Buttons --------------------------------------------------------- */
-
-button, .button {
-  display: block; width: 100%; text-align: center;
-  font-family: inherit; font-size: 1em; font-weight: 700;
-  padding: 0.65em 1em; margin: 1.2em 0 0;
-  border: 2px solid transparent; border-radius: 0; cursor: pointer;
-  background: var(--green); color: #fff; text-decoration: none;
-  box-shadow: 0 2px 0 var(--green-dark);
-}
-
-/* A link styled as a button has to say so in every state.
-   "a:visited" outweighs ".button", so without this the text turned
-   purple on green the moment somebody had followed it once — and it
-   only showed up after using the tool, never on a first look. */
-.button:link, .button:visited, .button:hover, .button:active { color: #fff; }
-.button.secondary:link, .button.secondary:visited,
-.button.secondary:hover, .button.secondary:active { color: var(--ink); }
-
-/* Focus is the exception, and has to come last. The focus marker is a
-   yellow background, so the text must stay dark against it — white
-   here would be unreadable, and only for whoever is using a keyboard.
-   These carry the same weight as the rules above, so the order is
-   what makes them win. */
-.button:focus, .button.secondary:focus { color: var(--ink); }
-/* Moved, not offset: "top" does nothing without a position, so the
-   button used to lose its edge on press without ever going down —
-   which read as a flicker rather than a press. */
-button:active, .button:active {
-  transform: translateY(2px); box-shadow: none;
-}
-button[disabled] { opacity: 0.5; cursor: default; }
-
-button.secondary, .button.secondary {
-  background: var(--light); color: var(--ink);
-  box-shadow: 0 2px 0 #929191;
-}
-button.danger {
-  background: var(--red); color: #fff; box-shadow: 0 2px 0 #55150b;
-}
-
-/* --- Lists of things to pick ----------------------------------------- */
-
-.cards { list-style: none; padding: 0; margin: 1em 0 0; }
-.cards li { margin-bottom: 0.6em; }
-.cards a {
-  display: block; padding: 0.9em 1em; background: var(--light);
-  color: var(--ink); text-decoration: none; border-left: 5px solid var(--ink);
-}
-.cards a:hover { background: #e8e6e4; }
-.cards strong { display: block; font-size: 1.05em; }
-.cards .note { color: var(--grey); font-size: 0.9em; }
-.cards a.incomplete { border-left-color: var(--red); }
-
-/* --- Check your answers ---------------------------------------------- */
-
-.summary { margin: 1em 0 0; border-top: 1px solid var(--line); }
-.summary .row {
-  display: flex; flex-wrap: wrap; gap: 0.3em 1em;
-  padding: 0.8em 0; border-bottom: 1px solid var(--line);
-}
-.summary .key { font-weight: 700; flex: 1 1 8em; }
-.summary .value { flex: 2 1 10em; }
-.summary .change { flex: 0 0 auto; text-align: right; }
-.summary .missing { color: var(--red); font-weight: 700; }
-
-/* --- Saying what happened -------------------------------------------- */
-
-.problem {
-  border: 5px solid var(--red); padding: 1em; margin: 1em 0;
-}
-.problem h2 { margin-top: 0; font-size: 1.2em; }
-.problem ul { margin: 0; padding-left: 1.2em; }
-.problem a { color: var(--red); }
-
-.panel {
-  background: var(--green); color: #fff;
-  padding: 1.4em 1em; text-align: center; margin: 1em 0;
-}
-.panel h1 { margin: 0 0 0.3em; color: #fff; }
-
-.inset { border-left: 5px solid var(--line); padding: 0.2em 0 0.2em 1em;
-         margin: 1em 0; color: var(--grey); }
-
-.notice {
-  background: #fff6e5; border-left: 5px solid #d97706;
-  padding: 0.9em 1em; margin: 1em 0;
-}
-.working { color: var(--grey); }
-
-/* A quiet strip that only appears when there is unsaved work. */
-.unsaved {
-  background: #fff6e5; border-bottom: 1px solid #d97706;
-  padding: 0.6em 1em; font-size: 0.9em;
-}
-
-audio { width: 100%; margin: 0.4em 0 0.8em; }
-
-/* Only show these notes when they have something to say, rather than
-   leaving a gap where they would have been. */
-.when-needed:empty { display: none; }

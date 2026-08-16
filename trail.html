@@ -30,7 +30,7 @@
     about a minute before a walker would hear them.</p>
     <button id="save">Save the trail</button>
 
-    <div id="result" hidden></div>
+    <div id="result" role="status" hidden></div>
     <p class="inset when-needed" id="listen"></p>
   </div>
 
@@ -125,7 +125,7 @@
         problems.hidden = true;
         result.className = "panel";
         result.innerHTML = "";
-        const heading = document.createElement("h1");
+        const heading = document.createElement("h2");
         heading.textContent = "Trail saved";
         const line = document.createElement("p");
         line.textContent = "It will be live in about a minute.";

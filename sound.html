@@ -14,18 +14,20 @@
     <a class="back" id="back" href="trails.html">Back</a>
     <div id="problems" hidden></div>
 
-    <label class="question" for="file">Which sound do you want to add?</label>
+    <h1>Add a sound</h1>
+
+    <label for="file">Which sound do you want to add?</label>
     <p class="hint">A voice memo, or any sound file from this device.</p>
     <input type="file" id="file" accept="audio/*">
 
-    <label class="question" for="name">What is this sound called?</label>
+    <label for="name">What is this sound called?</label>
     <p class="hint">How you will recognise it when choosing a sound for a
     zone. "Jimmy on the market" beats "New Recording 3".</p>
     <input type="text" id="name" autocomplete="off">
 
     <button id="go">Add this sound</button>
 
-    <div id="result" hidden></div>
+    <div id="result" role="status" hidden></div>
     <div id="afterwards" hidden>
       <a class="button" id="carryOn" href="#">Continue</a>
       <button class="secondary" id="another">Add another sound</button>
@@ -144,7 +146,7 @@
       const savedName = answer.savedName || savedAs;
       result.className = "panel";
       result.innerHTML = "";
-      const heading = document.createElement("h1");
+      const heading = document.createElement("h2");
       heading.textContent = "Sound added";
       const line = document.createElement("p");
       // Say what it was really called. A sound is never allowed to
@@ -166,7 +168,7 @@
       goButton.hidden = true;
       fileBox.hidden = true;
       nameBox.hidden = true;
-      document.querySelectorAll("label.question, .hint")
+      document.querySelectorAll("label, .hint")
         .forEach(function (bit) { bit.hidden = true; });
       document.getElementById("afterwards").hidden = false;
     });
