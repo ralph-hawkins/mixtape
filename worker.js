@@ -435,6 +435,18 @@ function base64FromText(text) {
   return btoa(binary);
 }
 
+// Exported only so test.mjs can call it directly with a path it ought
+// to refuse. Cloudflare never uses this — it only ever calls the
+// default export at the top.
+//
+// It is here because of something the tests found: every path this
+// service builds has already been through safeFileName, so the
+// allowlist inside putFile never actually rejects anything in normal
+// running. Delete the check entirely and nothing else notices. It
+// exists for the day somebody refactors and lets a raw path through,
+// and a last line of defence that cannot be tested is not one.
+export { putFile as putFileForTests };
+
 function corsHeaders(origin) {
   const allowed = ALLOWED_ORIGINS.indexOf(origin) !== -1
     ? origin : ALLOWED_ORIGINS[0];
