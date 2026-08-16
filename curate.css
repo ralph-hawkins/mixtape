@@ -125,6 +125,21 @@ button, .button {
   background: var(--green); color: #fff; text-decoration: none;
   box-shadow: 0 2px 0 var(--green-dark);
 }
+
+/* A link styled as a button has to say so in every state.
+   "a:visited" outweighs ".button", so without this the text turned
+   purple on green the moment somebody had followed it once — and it
+   only showed up after using the tool, never on a first look. */
+.button:link, .button:visited, .button:hover, .button:active { color: #fff; }
+.button.secondary:link, .button.secondary:visited,
+.button.secondary:hover, .button.secondary:active { color: var(--ink); }
+
+/* Focus is the exception, and has to come last. The focus marker is a
+   yellow background, so the text must stay dark against it — white
+   here would be unreadable, and only for whoever is using a keyboard.
+   These carry the same weight as the rules above, so the order is
+   what makes them win. */
+.button:focus, .button.secondary:focus { color: var(--ink); }
 button:active, .button:active { top: 2px; box-shadow: none; }
 button[disabled] { opacity: 0.5; cursor: default; }
 
