@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mixtape — layer test</title>
+
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      margin: 1em; line-height: 1.4; max-width: 40em;
+    }
+    button { font-size: 16px; padding: 8px 12px; }
+    #layers { border-collapse: collapse; margin: 1em 0; }
+    #layers td, #layers th {
+      padding: 0.4em 1em 0.4em 0; text-align: left; vertical-align: middle;
+    }
+    #log { list-style: none; padding-left: 0; font-size: 0.9em; }
+    .note {
+      background: #f4f4f4; border-left: 4px solid #888;
+      padding: 0.8em 1em; margin: 1em 0;
+    }
+    .on { font-weight: bold; }
+  </style>
+</head>
+<body>
+
+  <h1>Layer test</h1>
+  <p>Page published – <span id="published">—</span></p>
+
+  <p class="note">
+    A test rig, not part of the trail. It answers one question: can a
+    phone play three separate recordings at once and keep them
+    <strong>perfectly in time</strong> for as long as they loop?
+    Nothing here reads <code>trail.js</code> and nothing here can
+    affect the walker's page.
+  </p>
+
+  <p><strong>How to read the result.</strong> Point all three layers at
+  the <em>same</em> file (see the top of the code below) and turn them
+  all on. Three copies of one recording, perfectly locked, sound like
+  one recording. If they have drifted apart by even a few
+  thousandths of a second you will hear it as an echo, a flange, or a
+  hollow phasing sound. That is the whole test.</p>
+
+  <button id="start">Start</button>
+
+  <p>Stems – <span id="loading">not loaded yet</span></p>
+  <p>Playing for – <span id="elapsed">—</span></p>
+
+  <table id="layers"></table>
+
+  <h2>Log</h2>
+  <ul id="log"></ul>
+
+  <script>
+    // The three recordings to load. Any three files will do for the
+    // memory side of the test.
+    //
+    // FOR THE SYNC TEST: point all three at the SAME file. Perfectly
+    // locked copies sound like one recording; any drift at all sounds
+    // like an echo.
+    //
+    // Note for later: real layers of one song must all be exactly the
+    // same length, or they cannot loop together.
+    const STEMS = [
+      { name: "Layer 1", file: "assets/audio/test-001.m4a" },
+      { name: "Layer 2", file: "assets/audio/test-002.m4a" },
+      { name: "Layer 3", file: "assets/audio/test-003.m4a" }
+    ];
+
+    // Everything sums into one master knob before the speaker. Three
+    // layers at full would clip — especially three copies of the same
+    // recording, which add up exactly. A third each keeps the total
+    // at about full scale.
+    const MASTER_LEVEL = 0.4;
+
+    // A short ramp on every gain change, so switching a layer on or
+    // off is a swell rather than a click. Not the real fade lever —
+    // just enough to keep the test clean.
+    const SWITCH_SECONDS = 0.15;
+
+    document.getElementById("published").textContent =
+      new Date(document.lastModified).toLocaleString();
+
+    // Write one line to the log, newest at the top — same habit as the
+    // walker's page, because in the field you read the top line.
+    const logList = document.getElementById("log");
+    function logEvent(message) {
+      const line = document.createElement("li");
+      line.textContent =
+        new Date().toLocaleTimeString() + " — " + message;
+      logList.prepend(line);
+    }
+
+    // ----------------------------------------------------------------
+    // Step one: fetch the files. This needs no tap, so it happens as
+    // the page opens and is usually finished before anyone presses
+    // Start. Decoding them into playable sound has to wait for the
+    // tap, because that is when a browser lets us build audio.
+    // ----------------------------------------------------------------
+    const loadingLine = document.getElementById("loading");
+    let downloaded = 0;
+
+    STEMS.forEach(function (stem) {
+      stem.bytes = null;
+      fetch(stem.file)
+        .then(function (response) {
+          if (!response.ok) {
+            throw new Error("server said " + response.status);
+          }
+          return response.arrayBuffer();
+        })
+        .then(function (bytes) {
+          stem.bytes = bytes;
+          downloaded = downloaded + 1;
+          loadingLine.textContent =
+            downloaded + " of " + STEMS.length + " downloaded" +
+            (downloaded === STEMS.length ? " — ready to start" : "…");
+          logEvent(stem.name + " downloaded (" +
+            Math.round(bytes.byteLength / 1000) + " KB)");
+        })
+        .catch(function (error) {
+          loadingLine.textContent = "download failed";
+          logEvent(stem.name + " could not be downloaded: " +
+            error.message);
+        });
+    });
+
+    // ----------------------------------------------------------------
+    // The table: one row per layer, with its own on/off button.
+    // ----------------------------------------------------------------
+    const table = document.getElementById("layers");
+    const headerRow = table.insertRow();
+    ["Layer", "", "Length", "State"].forEach(function (heading) {
+      const cell = document.createElement("th");
+      cell.textContent = heading;
+      headerRow.appendChild(cell);
+    });
+
+    STEMS.forEach(function (stem) {
+      const row = table.insertRow();
+      row.insertCell().textContent = stem.name;
+
+      stem.button = document.createElement("button");
+      stem.button.textContent = "turn on";
+      stem.button.disabled = true;
+      row.insertCell().appendChild(stem.button);
+
+      stem.lengthCell = row.insertCell();
+      stem.lengthCell.textContent = "—";
+      stem.stateCell = row.insertCell();
+      stem.stateCell.textContent = "not started";
+
+      // Each layer is audible or not. Sound never stops either way —
+      // only the knob moves, which is exactly how the real thing will
+      // work.
+      stem.audible = false;
+      stem.button.addEventListener("click", function () {
+        stem.audible = !stem.audible;
+        const level = stem.audible ? (1 / STEMS.length) : 0;
+        const now = audioContext.currentTime;
+        stem.gainNode.gain.cancelScheduledValues(now);
+        stem.gainNode.gain.setValueAtTime(stem.gainNode.gain.value, now);
+        stem.gainNode.gain.linearRampToValueAtTime(
+          level, now + SWITCH_SECONDS);
+        stem.button.textContent = stem.audible ? "turn off" : "turn on";
+        stem.stateCell.textContent = stem.audible ? "audible" : "silent";
+        stem.stateCell.className = stem.audible ? "on" : "";
+        logEvent(stem.name + (stem.audible ? " on" : " off"));
+      });
+    });
+
+    // ----------------------------------------------------------------
+    // Decoding. Older Safari only offers the callback form, so ask for
+    // both and take whichever answers.
+    // ----------------------------------------------------------------
+    function decode(context, bytes) {
+      return new Promise(function (resolve, reject) {
+        const maybePromise =
+          context.decodeAudioData(bytes, resolve, reject);
+        if (maybePromise && typeof maybePromise.then === "function") {
+          maybePromise.then(resolve, reject);
+        }
+      });
+    }
+
+    // ----------------------------------------------------------------
+    // Start: decode everything, then set all three going at one
+    // scheduled moment. This is the bit that matters. Every layer is
+    // an AudioBufferSourceNode, and they all share the audio clock —
+    // so once started together they cannot drift apart, however long
+    // they loop. That is the claim this page is here to prove.
+    // ----------------------------------------------------------------
+    let audioContext = null;
+    let startedAt = null;
+
+    document.getElementById("start").addEventListener("click", function () {
+      const startButton = document.getElementById("start");
+      startButton.disabled = true;
+      startButton.textContent = "starting…";
+
+      // Check we have the files BEFORE building any audio. A phone only
+      // allows a handful of audio contexts per page, so tapping Start
+      // early a few times must not quietly use them all up. Leave the
+      // button working so it can simply be tapped again.
+      const missing = STEMS.filter(function (stem) { return !stem.bytes; });
+      if (missing.length > 0) {
+        logEvent("not downloaded yet (" +
+          missing.map(function (s) { return s.name; }).join(", ") +
+          ") — wait for \"ready to start\", then tap again");
+        startButton.textContent = "Start";
+        startButton.disabled = false;
+        return;
+      }
+
+      try {
+        audioContext =
+          new (window.AudioContext || window.webkitAudioContext)();
+      } catch (error) {
+        logEvent("no Web Audio in this browser — cannot run the test");
+        startButton.textContent = "no Web Audio";
+        return;
+      }
+      audioContext.resume();
+
+      // One knob for everything, so three layers together cannot clip.
+      const master = audioContext.createGain();
+      master.gain.value = MASTER_LEVEL;
+      master.connect(audioContext.destination);
+
+      Promise.all(STEMS.map(function (stem) {
+        return decode(audioContext, stem.bytes).then(function (buffer) {
+          stem.buffer = buffer;
+          stem.lengthCell.textContent = buffer.duration.toFixed(2) + " s";
+          logEvent(stem.name + " decoded — " +
+            buffer.duration.toFixed(2) + " s, " +
+            buffer.numberOfChannels + " channel(s), " +
+            Math.round(buffer.length * buffer.numberOfChannels * 4 / 1e6) +
+            " MB in memory");
+        });
+      })).then(function () {
+
+        // Schedule a moment slightly in the future and start every
+        // layer at exactly that moment. Starting them one after
+        // another "now" would already be a few milliseconds apart.
+        const beginAt = audioContext.currentTime + 0.3;
+
+        STEMS.forEach(function (stem) {
+          stem.gainNode = audioContext.createGain();
+          stem.gainNode.gain.value = 0;
+          stem.gainNode.connect(master);
+
+          stem.source = audioContext.createBufferSource();
+          stem.source.buffer = stem.buffer;
+          stem.source.loop = true;
+          stem.source.connect(stem.gainNode);
+          stem.source.start(beginAt);
+
+          stem.button.disabled = false;
+          stem.stateCell.textContent = "silent";
+        });
+
+        startedAt = beginAt;
+        startButton.textContent = "running";
+        logEvent("all " + STEMS.length + " layers started together, " +
+          "looping — turn them on to listen");
+
+        // Do the lengths match? Layers of one song must, or they will
+        // loop at different points and slide apart musically even
+        // though the clock is perfect.
+        const lengths = STEMS.map(function (s) {
+          return s.buffer.duration.toFixed(2);
+        });
+        if (new Set(lengths).size > 1) {
+          logEvent("note: these files are different lengths (" +
+            lengths.join(", ") + " s) — fine for testing that three " +
+            "streams play at once, but real layers of one song must " +
+            "match");
+        }
+
+      }).catch(function (error) {
+        logEvent("could not decode: " + error.message);
+        startButton.textContent = "decode failed";
+      });
+
+      // A heartbeat, so a test left running for five minutes can be
+      // seen to be still alive — and so silence has a witness.
+      setInterval(function () {
+        if (startedAt === null) { return; }
+        const seconds = audioContext.currentTime - startedAt;
+        if (seconds < 0) { return; }
+        const first = STEMS[0].buffer;
+        const loops = first ? Math.floor(seconds / first.duration) : 0;
+        document.getElementById("elapsed").textContent =
+          Math.floor(seconds) + " s (" + loops + " loops of layer 1)";
+      }, 1000);
+    });
+  </script>
+
+</body>
+</html>
