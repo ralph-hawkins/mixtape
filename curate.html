@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mixtape — add a sound</title>
+
+  <style>
+    body {
+      font-family: system-ui, -apple-system, sans-serif;
+      margin: 0; padding: 1.2em; line-height: 1.5;
+      max-width: 34em; color: #111;
+    }
+    h1 { font-size: 1.5em; margin: 0 0 0.2em; }
+    .lead { color: #444; margin-top: 0; }
+
+    label { display: block; font-weight: 600; margin: 1.2em 0 0.3em; }
+    .hint { font-weight: 400; color: #555; font-size: 0.9em; }
+
+    input[type=text], input[type=password], input[type=file] {
+      font-size: 16px; padding: 0.6em; width: 100%;
+      box-sizing: border-box; border: 1px solid #999; border-radius: 4px;
+    }
+
+    button {
+      font-size: 17px; padding: 0.8em 1.2em; margin-top: 1.4em;
+      width: 100%; border: 0; border-radius: 4px;
+      background: #1a6e1a; color: #fff; font-weight: 600;
+    }
+    button[disabled] { background: #999; }
+
+    #result { margin-top: 1.2em; padding: 0.9em 1em; border-radius: 4px; }
+    .good { background: #e6f4e6; border-left: 4px solid #1a6e1a; }
+    .bad  { background: #fdeaea; border-left: 4px solid #b30000; }
+    .busy { background: #eef2f7; border-left: 4px solid #4a6c8f; }
+
+    .setup {
+      background: #fff6e5; border-left: 4px solid #d97706;
+      padding: 0.9em 1em; margin-bottom: 1.5em;
+    }
+    #added { padding-left: 1.2em; color: #333; font-size: 0.95em; }
+    footer { margin-top: 2.5em; color: #666; font-size: 0.9em; }
+  </style>
+</head>
+<body>
+
+  <h1>Add a sound to the trail</h1>
+  <p class="lead">Choose a sound from this device and add it. It appears
+  on the trail about a minute later.</p>
+
+  <!-- Shown only until the save service has an address. -->
+  <div class="setup" id="setup" hidden>
+    <strong>Not quite ready.</strong> The part that saves your work has
+    not been switched on yet. Ralph needs to finish setting it up before
+    this page can add anything.
+  </div>
+
+  <label for="who">Your name
+    <span class="hint">— so the trail records who added what.</span>
+  </label>
+  <input type="text" id="who" autocomplete="name" placeholder="Jamie">
+
+  <label for="password">Password
+    <span class="hint">— the one Ralph gave you. This device will
+    remember it.</span>
+  </label>
+  <input type="password" id="password" autocomplete="current-password">
+
+  <label for="file">The sound
+    <span class="hint">— a voice memo or any sound file.</span>
+  </label>
+  <input type="file" id="file" accept="audio/*">
+
+  <button id="send" disabled>Add this sound</button>
+
+  <div id="result" hidden></div>
+
+  <h2 id="addedHeading" hidden>Added just now</h2>
+  <ul id="added"></ul>
+
+  <footer>
+    <p>Once a sound is added you can point a zone at it. Ask Ralph if
+    you are not sure which sound belongs where.</p>
+  </footer>
+
+  <script>
+    // The address of the small service that saves your work. Ralph
+    // fills this in once, after creating it. Until then the page says
+    // so rather than failing in a confusing way.
+    const SAVE_SERVICE = "PASTE_THE_WORKER_URL_HERE";
+
+    const whoBox = document.getElementById("who");
+    const passwordBox = document.getElementById("password");
+    const fileBox = document.getElementById("file");
+    const sendButton = document.getElementById("send");
+    const resultBox = document.getElementById("result");
+    const addedList = document.getElementById("added");
+
+    const ready = /^https?:\/\//.test(SAVE_SERVICE);
+    if (!ready) {
+      document.getElementById("setup").hidden = false;
+    }
+
+    // Remember the name and password on this device, so nobody has to
+    // type them again every time. They never leave this browser except
+    // to the save service.
+    whoBox.value = localStorage.getItem("mixtape-who") || "";
+    passwordBox.value = localStorage.getItem("mixtape-password") || "";
+    whoBox.addEventListener("input", function () {
+      localStorage.setItem("mixtape-who", whoBox.value);
+    });
+    passwordBox.addEventListener("input", function () {
+      localStorage.setItem("mixtape-password", passwordBox.value);
+    });
+
+    // The button only wakes up when there is something to send.
+    function refreshButton() {
+      sendButton.disabled = !(ready &&
+        whoBox.value.trim() &&
+        passwordBox.value &&
+        fileBox.files.length > 0);
+    }
+    [whoBox, passwordBox, fileBox].forEach(function (box) {
+      box.addEventListener("input", refreshButton);
+      box.addEventListener("change", refreshButton);
+    });
+    refreshButton();
+
+    function say(message, kind) {
+      resultBox.hidden = false;
+      resultBox.className = kind;
+      resultBox.textContent = message;
+    }
+
+    // Turn the chosen file into text that can be sent. readAsDataURL
+    // does the encoding for us — doing it by hand runs out of memory on
+    // a file this size.
+    function readAsBase64(file) {
+      return new Promise(function (resolve, reject) {
+        const reader = new FileReader();
+        reader.onload = function () {
+          const comma = String(reader.result).indexOf(",");
+          resolve(String(reader.result).slice(comma + 1));
+        };
+        reader.onerror = function () {
+          reject(new Error("This device could not read that file."));
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    sendButton.addEventListener("click", async function () {
+      const file = fileBox.files[0];
+      if (!file) { return; }
+
+      sendButton.disabled = true;
+      say("Adding " + file.name + "…", "busy");
+
+      let base64;
+      try {
+        base64 = await readAsBase64(file);
+      } catch (error) {
+        say(error.message, "bad");
+        refreshButton();
+        return;
+      }
+
+      let response, answer;
+      try {
+        response = await fetch(SAVE_SERVICE.replace(/\/+$/, "") + "/audio", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            password: passwordBox.value,
+            who: whoBox.value,
+            name: file.name,
+            contentBase64: base64
+          })
+        });
+        answer = await response.json();
+      } catch (error) {
+        // A refused connection looks identical to being offline, so say
+        // both rather than guessing.
+        say("Could not reach the save service. Check you are online, " +
+            "then try again.", "bad");
+        refreshButton();
+        return;
+      }
+
+      if (!response.ok) {
+        say(answer.error || "That did not work.", "bad");
+        refreshButton();
+        return;
+      }
+
+      say("Added. It will be on the trail in about a minute.", "good");
+      document.getElementById("addedHeading").hidden = false;
+      const line = document.createElement("li");
+      line.textContent = file.name;
+      addedList.appendChild(line);
+
+      // Clear the picker so the same file cannot be added twice by
+      // accident, but leave the name and password alone.
+      fileBox.value = "";
+      refreshButton();
+    });
+  </script>
+
+</body>
+</html>
