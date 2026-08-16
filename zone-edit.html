@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Zone setting — Mixtape</title>
+  <link rel="stylesheet" href="curate.css">
+</head>
+<body>
+
+  <div class="masthead">Mixtape</div>
+
+  <div class="page">
+    <a class="back" id="back" href="#">Back</a>
+    <div id="problems" hidden></div>
+
+    <form id="form" onsubmit="return false">
+      <div id="question"></div>
+      <button id="go">Continue</button>
+    </form>
+  </div>
+
+  <script src="trail-file.js"></script>
+  <script src="curate.js"></script>
+  <script>
+    const problems = document.getElementById("problems");
+    const box = document.getElementById("question");
+    const id = Curate.ask("trail");
+    const index = Number(Curate.ask("zone"));
+    const field = Curate.ask("field");
+    const adding = Curate.ask("new") === "yes";
+
+    // When a zone is being created, the questions it cannot do without
+    // are asked one after another. Everything else has a sensible
+    // starting point and can be changed later from the summary.
+    const WHEN_NEW = ["name", "sound", "where", "size"];
+
+    // ----------------------------------------------------------------
+    // Small builders, so each question below stays one short block.
+    // ----------------------------------------------------------------
+    function ask(question, hint) {
+      const label = document.createElement("label");
+      label.className = "question";
+      label.setAttribute("for", "answer");
+      label.textContent = question;
+      box.appendChild(label);
+      if (hint) {
+        const note = document.createElement("p");
+        note.className = "hint";
+        note.textContent = hint;
+        box.appendChild(note);
+      }
+    }
+
+    function textBox(value, kind) {
+      const input = document.createElement("input");
+      input.type = kind || "text";
+      input.id = "answer";
+      input.value = (value === undefined || value === null) ? "" : value;
+      box.appendChild(input);
+      return input;
+    }
+
+    // Radio buttons, in a fieldset so the question is read out with
+    // them rather than floating above unattached.
+    function choices(question, hint, options, current) {
+      const set = document.createElement("fieldset");
+      const legend = document.createElement("legend");
+      legend.className = "question";
+      legend.textContent = question;
+      set.appendChild(legend);
+      if (hint) {
+        const note = document.createElement("p");
+        note.className = "hint";
+        note.textContent = hint;
+        set.appendChild(note);
+      }
+      options.forEach(function (option, n) {
+        const wrap = document.createElement("label");
+        wrap.className = "choice";
+        const input = document.createElement("input");
+        input.type = "radio";
+        input.name = "answer";
+        input.value = option[0];
+        input.id = "answer" + (n === 0 ? "" : n);
+        if (String(current) === String(option[0])) { input.checked = true; }
+        wrap.appendChild(input);
+        wrap.appendChild(document.createTextNode(option[1]));
+        if (option[2]) {
+          const note = document.createElement("span");
+          note.className = "note";
+          note.textContent = option[2];
+          wrap.appendChild(note);
+        }
+        set.appendChild(wrap);
+      });
+      box.appendChild(set);
+      return function () {
+        const picked = set.querySelector("input:checked");
+        return picked ? picked.value : null;
+      };
+    }
+
+    // ----------------------------------------------------------------
+    // The questions. Each one puts itself on the page and hands back a
+    // way to read the answer: either { value } or { problem }.
+    // ----------------------------------------------------------------
+    const QUESTIONS = {
+
+      name: function (zone) {
+        ask("What is this zone called?",
+          "Something you would recognise on a map — a corner, a shop, " +
+          "a bench. Walkers do not see it.");
+        const input = textBox(zone.name);
+        return function () {
+          const value = input.value.trim();
+          return value ? { value: value } : { problem: "Enter a name" };
+        };
+      },
+
+      sound: function (zone, sounds) {
+        if (sounds.length === 0) {
+          ask("Which sound plays here?");
+          const none = document.createElement("p");
+          none.textContent = "No sounds have been added yet.";
+          box.appendChild(none);
+          const add = document.createElement("a");
+          add.className = "button";
+          add.href = "sound.html?" + backHere();
+          add.textContent = "Add a sound";
+          box.appendChild(add);
+          document.getElementById("go").hidden = true;
+          return function () { return { problem: "Add a sound first" }; };
+        }
+
+        const read = choices("Which sound plays here?",
+          "Listen to any of them before choosing.",
+          sounds.map(function (path) {
+            return [path, path.split("/").pop()];
+          }), zone.audio);
+
+        // A player under the list, so a sound can be heard without
+        // leaving the question.
+        const player = document.createElement("audio");
+        player.controls = true;
+        player.preload = "none";
+        box.appendChild(player);
+        const trouble = document.createElement("p");
+        trouble.className = "hint when-needed";
+        box.appendChild(trouble);
+
+        function listen() {
+          const picked = read();
+          if (!picked) { return; }
+          trouble.textContent = "";
+          player.src = picked + "?t=" + Date.now();
+          player.onerror = function () {
+            trouble.textContent = "This one will not play yet. If it was " +
+              "just added, give it a minute — it is still going live.";
+          };
+        }
+        box.addEventListener("change", listen);
+        if (zone.audio) { listen(); }
+
+        const add = document.createElement("a");
+        add.className = "button secondary";
+        add.href = "sound.html?" + backHere();
+        add.textContent = "Add another sound";
+        box.appendChild(add);
+
+        return function () {
+          const picked = read();
+          return picked ? { value: picked } : { problem: "Choose a sound" };
+        };
+      },
+
+      where: function (zone) {
+        ask("Where is this zone?",
+          "Stand on the spot and read the Position line off the trail " +
+          "page, or right-click the place in Google Maps and paste both " +
+          "numbers into the first box.");
+        const pair = document.createElement("div");
+        pair.className = "pair";
+        const lat = document.createElement("input");
+        lat.type = "text"; lat.id = "answer"; lat.inputMode = "decimal";
+        lat.placeholder = "latitude";
+        lat.value = (zone.lat === undefined) ? "" : zone.lat;
+        const lon = document.createElement("input");
+        lon.type = "text"; lon.inputMode = "decimal";
+        lon.placeholder = "longitude";
+        lon.value = (zone.lon === undefined) ? "" : zone.lon;
+        pair.appendChild(lat);
+        pair.appendChild(lon);
+        box.appendChild(pair);
+
+        // Google Maps hands both numbers over in one piece. Paste that
+        // into the first box and it sorts itself out, rather than
+        // making somebody split it by hand and get it wrong.
+        lat.addEventListener("input", function () {
+          const parts = lat.value.split(",");
+          if (parts.length === 2 && parts[1].trim() !== "") {
+            lat.value = parts[0].trim();
+            lon.value = parts[1].trim();
+          }
+        });
+
+        return function () {
+          if (!isUsableNumber(lat.value) || !isUsableNumber(lon.value)) {
+            return { problem: "Enter both numbers, for example " +
+              "51.461620 and 0.010941" };
+          }
+          return { value: { lat: Number(lat.value), lon: Number(lon.value) } };
+        };
+      },
+
+      size: function (zone) {
+        ask("How big is this zone?",
+          "Metres from the middle to the edge. Below about 20, GPS is " +
+          "too shaky to be relied on.");
+        const input = textBox(zone.radius, "number");
+        input.min = 5; input.max = 500; input.step = 5;
+        return function () {
+          if (!isUsableNumber(input.value) || Number(input.value) < 1) {
+            return { problem: "Enter how many metres across the zone is" };
+          }
+          return { value: Number(input.value) };
+        };
+      },
+
+      loop: function (zone) {
+        const read = choices("While someone stands in the zone", null, [
+          ["false", "Play once, then go quiet"],
+          ["true", "Repeat for as long as they stay"]
+        ], zone.loop === true);
+        return function () { return { value: read() === "true" }; };
+      },
+
+      exit: function (zone) {
+        const read = choices("When they walk out mid-sound", null, [
+          ["stop", "Go quiet"],
+          ["finish", "Let it finish playing",
+            "The sound keeps going until it ends naturally, even once " +
+            "they have left."]
+        ], zone.exit === "finish" ? "finish" : "stop");
+        return function () { return { value: read() }; };
+      },
+
+      plays: function (zone) {
+        const limited = (typeof zone.plays === "number");
+        const read = choices("How many times can this sound start?",
+          "Coming back part way through never uses one up — only " +
+          "starting from the beginning counts.", [
+            ["always", "As many times as they come back"],
+            ["limit", "A set number, then stay quiet"]
+          ], limited ? "limit" : "always");
+
+        const howMany = document.createElement("input");
+        howMany.type = "number";
+        howMany.min = 1; howMany.max = 99; howMany.step = 1;
+        howMany.value = limited ? zone.plays : 1;
+        howMany.hidden = !limited;
+        box.appendChild(howMany);
+        box.addEventListener("change", function () {
+          howMany.hidden = (read() !== "limit");
+        });
+
+        return function () {
+          if (read() !== "limit") { return { value: "always" }; }
+          const n = Number(howMany.value);
+          if (!Number.isFinite(n) || n < 1) {
+            return { problem: "Enter how many times it can start" };
+          }
+          return { value: Math.round(n) };
+        };
+      },
+
+      fadeIn: function (zone) {
+        ask("How long should the sound take to fade in?",
+          "Seconds to rise from silence. 0 starts at full volume.");
+        const input = textBox(zone.fadeIn || 0, "number");
+        input.min = 0; input.max = 60; input.step = 1;
+        return function () {
+          const n = Number(input.value);
+          if (!Number.isFinite(n) || n < 0) {
+            return { problem: "Enter a number of seconds, or 0" };
+          }
+          return { value: n };
+        };
+      },
+
+      fadeOut: function (zone) {
+        ask("How long should the sound take to fade out?",
+          zone.exit === "finish"
+            ? "This zone lets its sound finish, so a fade out is not " +
+              "used. Change that first if you want one."
+            : "Seconds to die away after they walk out. 0 stops at once.");
+        const input = textBox(zone.fadeOut || 0, "number");
+        input.min = 0; input.max = 60; input.step = 1;
+        return function () {
+          const n = Number(input.value);
+          if (!Number.isFinite(n) || n < 0) {
+            return { problem: "Enter a number of seconds, or 0" };
+          }
+          return { value: n };
+        };
+      }
+    };
+
+    // What to write back into the zone. Most questions set one setting;
+    // "where" sets two, because they are one answer.
+    function apply(zone, answer) {
+      if (field === "where") {
+        zone.lat = answer.lat; zone.lon = answer.lon;
+      } else if (field === "sound") {
+        zone.audio = answer;
+      } else {
+        zone[field] = answer;
+      }
+    }
+
+    function backHere() {
+      return "then=" + encodeURIComponent(location.pathname.split("/").pop() +
+        location.search);
+    }
+
+    function summaryUrl() {
+      return "zone.html?trail=" + encodeURIComponent(id) + "&zone=" + index;
+    }
+
+    // ----------------------------------------------------------------
+    let readAnswer = null;
+
+    Curate.start(function () {
+      const trail = Curate.trails()[id];
+      const zone = trail && (trail.zones || [])[index];
+      if (!zone || !QUESTIONS[field]) {
+        Curate.showProblems(problems,
+          [{ says: "There is nothing to change here." }]);
+        return;
+      }
+      document.getElementById("back").href = adding
+        ? "trail.html?trail=" + encodeURIComponent(id) : summaryUrl();
+
+      if (field === "sound") {
+        Curate.sounds(function (list) {
+          readAnswer = QUESTIONS.sound(zone, list);
+        });
+      } else {
+        readAnswer = QUESTIONS[field](zone);
+      }
+    }, function (message) {
+      Curate.showProblems(problems, [{ says: message }]);
+    });
+
+    document.getElementById("go").addEventListener("click", function () {
+      if (!readAnswer) { return; }
+      const answer = readAnswer();
+      if (answer.problem) {
+        Curate.showProblems(problems, [{ says: answer.problem }]);
+        return;
+      }
+      Curate.update(function (trails) {
+        apply(trails[id].zones[index], answer.value);
+      });
+
+      // While a zone is being created, go straight on to the next
+      // question rather than back to a summary full of blanks.
+      if (adding) {
+        const next = WHEN_NEW[WHEN_NEW.indexOf(field) + 1];
+        if (next) {
+          Curate.go("zone-edit.html?trail=" + encodeURIComponent(id) +
+            "&zone=" + index + "&field=" + next + "&new=yes");
+          return;
+        }
+      }
+      Curate.go(summaryUrl());
+    });
+  </script>
+
+</body>
+</html>

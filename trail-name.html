@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Name the trail — Mixtape</title>
+  <link rel="stylesheet" href="curate.css">
+</head>
+<body>
+
+  <div class="masthead">Mixtape</div>
+
+  <div class="page">
+    <a class="back" id="back" href="trails.html">Back</a>
+    <div id="problems" hidden></div>
+
+    <label class="question" for="name">What is this trail called?</label>
+    <p class="hint">Somewhere people would recognise — a town, a street,
+    or the name of the walk.</p>
+    <input type="text" id="name" autocomplete="off">
+
+    <button id="go">Continue</button>
+  </div>
+
+  <script src="trail-file.js"></script>
+  <script src="curate.js"></script>
+  <script>
+    const problems = document.getElementById("problems");
+    const nameBox = document.getElementById("name");
+    // With a trail named in the address this is a rename; without one
+    // it is a new trail.
+    const existing = Curate.ask("trail");
+
+    Curate.start(function () {
+      const all = Curate.trails();
+      if (existing) {
+        if (!all[existing]) {
+          Curate.showProblems(problems, [{ says: "That trail no longer exists." }]);
+          return;
+        }
+        nameBox.value = all[existing].name || "";
+        document.getElementById("back").href =
+          "trail.html?trail=" + encodeURIComponent(existing);
+      }
+      nameBox.focus();
+    }, function (message) {
+      Curate.showProblems(problems, [{ says: message }]);
+    });
+
+    document.getElementById("go").addEventListener("click", function () {
+      const name = nameBox.value.trim();
+      if (!name) {
+        Curate.showProblems(problems, [{ says: "Enter a name for the trail" }]);
+        return;
+      }
+
+      const all = Curate.trails();
+
+      if (existing) {
+        // Renaming only changes the name people see. The short name in
+        // the web address stays put, so links already shared with
+        // walkers keep working.
+        Curate.update(function (trails) { trails[existing].name = name; });
+        Curate.go("trail.html?trail=" + encodeURIComponent(existing));
+        return;
+      }
+
+      let id = trailId(name);
+      if (!id) {
+        Curate.showProblems(problems,
+          [{ says: "The name needs some letters or numbers in it" }]);
+        return;
+      }
+      // Two trails could easily be given the same name. Rather than
+      // refusing, quietly number the second one's short name — the
+      // curator never sees it, and nothing is overwritten.
+      let unique = id;
+      let n = 2;
+      while (all[unique]) { unique = id + "-" + n; n = n + 1; }
+
+      Curate.update(function (trails) {
+        trails[unique] = { name: name, zones: [] };
+      });
+      Curate.go("trail.html?trail=" + encodeURIComponent(unique));
+    });
+  </script>
+
+</body>
+</html>

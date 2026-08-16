@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>The zone — Mixtape</title>
+  <link rel="stylesheet" href="curate.css">
+</head>
+<body>
+
+  <div class="masthead">Mixtape</div>
+
+  <div class="page">
+    <a class="back" id="back" href="#">Back to the trail</a>
+    <div id="problems" hidden></div>
+
+    <h1 id="title">Zone</h1>
+    <p class="hint">Check the settings for this zone. Change anything
+    that is not right.</p>
+
+    <div class="summary" id="summary"></div>
+
+    <a class="button" id="done" href="#">Done</a>
+    <button class="danger" id="remove">Remove this zone</button>
+  </div>
+
+  <script src="trail-file.js"></script>
+  <script src="curate.js"></script>
+  <script>
+    const problems = document.getElementById("problems");
+    const id = Curate.ask("trail");
+    const index = Number(Curate.ask("zone"));
+
+    // How each setting reads to somebody who has never seen the file.
+    // "Plays once" rather than loop: false.
+    const ROWS = [
+      ["name", "Name", function (z) { return z.name; }],
+      ["sound", "Sound", function (z) {
+        return z.audio ? String(z.audio).split("/").pop() : ""; }],
+      ["where", "Where it is", function (z) {
+        return isUsableNumber(z.lat) && isUsableNumber(z.lon)
+          ? z.lat + ", " + z.lon : ""; }],
+      ["size", "How big", function (z) {
+        return isUsableNumber(z.radius) ? z.radius + " metres across" : ""; }],
+      ["loop", "While someone stands there", function (z) {
+        return z.loop === true
+          ? "The sound repeats" : "The sound plays once, then goes quiet"; }],
+      ["exit", "When they walk out", function (z) {
+        return z.exit === "finish"
+          ? "It finishes playing" : "It goes quiet"; }],
+      ["plays", "How many times it can start", function (z) {
+        return (typeof z.plays === "number")
+          ? z.plays + (z.plays === 1 ? " time" : " times")
+          : "As many times as they come back"; }],
+      ["fadeIn", "Fade in", function (z) {
+        return z.fadeIn ? z.fadeIn + " seconds" : "Starts at full volume"; }],
+      ["fadeOut", "Fade out", function (z) {
+        if (z.exit === "finish") { return "Not used — it finishes instead"; }
+        return z.fadeOut ? z.fadeOut + " seconds" : "Stops at once"; }]
+    ];
+
+    function draw() {
+      const trail = Curate.trails()[id];
+      const zone = trail && (trail.zones || [])[index];
+      if (!zone) {
+        Curate.showProblems(problems, [{ says: "That zone no longer exists." }]);
+        return;
+      }
+
+      const backTo = "trail.html?trail=" + encodeURIComponent(id);
+      document.getElementById("back").href = backTo;
+      document.getElementById("done").href = backTo;
+      document.getElementById("title").textContent =
+        zone.name || "A new zone";
+      document.title = (zone.name || "The zone") + " — Mixtape";
+
+      const summary = document.getElementById("summary");
+      summary.innerHTML = "";
+      ROWS.forEach(function (row) {
+        const value = row[2](zone);
+
+        const line = document.createElement("div");
+        line.className = "row";
+
+        const key = document.createElement("div");
+        key.className = "key";
+        key.textContent = row[1];
+
+        const shown = document.createElement("div");
+        shown.className = "value" + (value ? "" : " missing");
+        shown.textContent = value || "Not set yet";
+
+        const change = document.createElement("div");
+        change.className = "change";
+        const link = document.createElement("a");
+        link.href = "zone-edit.html?trail=" + encodeURIComponent(id) +
+          "&zone=" + index + "&field=" + row[0];
+        link.textContent = value ? "Change" : "Set";
+        // Screen readers hear a page full of links called "Change"
+        // otherwise, with no idea what each one changes.
+        link.setAttribute("aria-label",
+          (value ? "Change " : "Set ") + row[1].toLowerCase());
+        change.appendChild(link);
+
+        line.appendChild(key);
+        line.appendChild(shown);
+        line.appendChild(change);
+        summary.appendChild(line);
+      });
+    }
+
+    Curate.start(function () {
+      // A zone that has just been created has nothing in it, so start
+      // by asking the questions rather than showing a page of blanks.
+      if (Curate.ask("new") === "yes") {
+        Curate.go("zone-edit.html?trail=" + encodeURIComponent(id) +
+          "&zone=" + index + "&field=name&new=yes");
+        return;
+      }
+      draw();
+    }, function (message) {
+      Curate.showProblems(problems, [{ says: message }]);
+    });
+
+    document.getElementById("remove").addEventListener("click", function () {
+      const trail = Curate.trails()[id];
+      const zone = trail && (trail.zones || [])[index];
+      if (!zone) { return; }
+      const sure = window.confirm(
+        "Remove " + (zone.name || "this zone") + "?\n\n" +
+        "It is only really gone once you save the trail.");
+      if (!sure) { return; }
+      Curate.update(function (trails) { trails[id].zones.splice(index, 1); });
+      Curate.go("trail.html?trail=" + encodeURIComponent(id));
+    });
+  </script>
+
+</body>
+</html>

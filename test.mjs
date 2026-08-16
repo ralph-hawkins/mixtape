@@ -14,15 +14,22 @@
 //      a public repository, so what it refuses matters more than what
 //      it allows. Anything weakened here should fail loudly.
 //
-//   2. The trail serialiser inside curate.html — the code that writes
-//      trail.js. If it ever drops a setting, a curator saving the
-//      trail would quietly delete part of it.
+//   2. trail-file.js — the code that writes trail.js and decides
+//      whether a trail is fit to save. If it ever drops a setting, a
+//      curator saving the trail would quietly delete part of it.
 // =====================================================================
 
 import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
 
 const workerSource = readFileSync(new URL("worker.js", import.meta.url), "utf8");
-const pageSource = readFileSync(new URL("curate.html", import.meta.url), "utf8");
+
+// trail-file.js is a plain script the pages load with a script tag, and
+// it hands its functions out to Node as well — so these tests run the
+// very code the tool runs, not a copy of it.
+const require = createRequire(import.meta.url);
+const { trailsToFile, ZONE_FIELDS, isUsableNumber, trailId,
+        zoneProblems, trailProblems } = require("./trail-file.js");
 
 // Load worker.js as a module without renaming it or adding a
 // package.json, by handing its text straight to the importer.
@@ -312,25 +319,6 @@ section("Saving the trail never loses a setting");
 // The real code is lifted out of the page rather than copied, so this
 // cannot drift away from what actually runs.
 // =====================================================================
-// Found by explicit markers rather than by whatever comment happened
-// to follow it — an earlier version keyed off a passing comment, and
-// deleting that comment made this whole section fall over instead of
-// reporting anything useful.
-const from = pageSource.indexOf("// === SERIALISER START");
-const to = pageSource.indexOf("// === SERIALISER END");
-check("the serialiser markers are still in curate.html", from > 0 && to > from,
-  from < 0 ? "no START marker" : to < 0 ? "no END marker" : "");
-
-if (from < 0 || to < from) {
-  console.log("\nCannot test the serialiser without those markers. " +
-    "Everything below this point was skipped.");
-  console.log("\n" + failures + " test(s) FAILED.");
-  process.exit(1);
-}
-
-const { trailsToFile, ZONE_FIELDS } = new Function(
-  pageSource.slice(from, to) + "; return { trailsToFile, ZONE_FIELDS };")();
-
 const everySetting = {
   name: "A zone", lat: 51.4, lon: 0.01, radius: 40,
   audio: "assets/audio/a.m4a", loop: true, exit: "finish",
@@ -391,6 +379,42 @@ for (const [search, expected] of [["", "One"], ["?trail=two", "Two"],
   check("?trail picks the right one" + (search ? " (" + search + ")" : " (none)"),
     picked.name === expected, picked.name);
 }
+
+// =====================================================================
+section("Naming a trail, and knowing when one is not finished");
+// =====================================================================
+for (const [name, expected] of [
+  ["Priory Park", "priory-park"],
+  ["High Street!", "high-street"],
+  ["  Spaces  Everywhere  ", "spaces-everywhere"],
+  ["Caf\u00e9 corner", "caf-corner"],
+  ["!!!", ""],
+  ["", ""]]) {
+  check(`"${name}" becomes "${expected}"`, trailId(name) === expected,
+    trailId(name));
+}
+check("a very long name is cut short", trailId("x".repeat(200)).length <= 40);
+
+const goodZone = { name: "West", lat: 51.4, lon: 0.01, radius: 40,
+  audio: "assets/audio/a.m4a" };
+check("a finished zone has nothing wrong with it",
+  zoneProblems(goodZone).length === 0);
+for (const [missing, expected] of [
+  ["name", "name"], ["audio", "sound"], ["lat", "where"],
+  ["lon", "where"], ["radius", "size"]]) {
+  const broken = { ...goodZone };
+  delete broken[missing];
+  const found = zoneProblems(broken);
+  check(`a zone with no ${missing} is caught, pointing at "${expected}"`,
+    found.length === 1 && found[0].field === expected,
+    found.map(f => f.field).join(","));
+}
+check("a zone whose position is a word, not a number, is caught",
+  zoneProblems({ ...goodZone, lat: "north" }).length === 1);
+check("a trail with no zones is caught",
+  trailProblems({ t: { name: "Empty", zones: [] } }).length === 1);
+check("a finished trail passes",
+  trailProblems({ t: { name: "Fine", zones: [goodZone] } }).length === 0);
 
 // =====================================================================
 console.log("\n" + (failures === 0

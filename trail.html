@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>The trail — Mixtape</title>
+  <link rel="stylesheet" href="curate.css">
+</head>
+<body>
+
+  <div class="masthead">Mixtape</div>
+
+  <div class="page">
+    <a class="back" href="trails.html">Back to your trails</a>
+    <div id="problems" hidden></div>
+
+    <h1 id="title">Trail</h1>
+    <p><a id="rename" href="#">Change the name</a></p>
+
+    <h2>Zones</h2>
+    <p class="hint" id="zonesNote">Each zone is a place with a sound.
+    Walk into it and the sound plays.</p>
+
+    <ul class="cards" id="zones"></ul>
+    <button class="secondary" id="addZone">Add a zone</button>
+
+    <h2>When you are ready</h2>
+    <p class="hint">Saving puts your changes on the trail. It takes
+    about a minute before a walker would hear them.</p>
+    <button id="save">Save the trail</button>
+
+    <div id="result" hidden></div>
+    <p class="inset when-needed" id="listen"></p>
+  </div>
+
+  <script src="trail-file.js"></script>
+  <script src="curate.js"></script>
+  <script>
+    const problems = document.getElementById("problems");
+    const result = document.getElementById("result");
+    const zoneList = document.getElementById("zones");
+    const id = Curate.ask("trail");
+
+    function draw() {
+      const trail = Curate.trails()[id];
+      if (!trail) {
+        Curate.showProblems(problems, [{ says: "That trail no longer exists." }]);
+        return;
+      }
+      document.title = trail.name + " — Mixtape";
+      document.getElementById("title").textContent = trail.name;
+      document.getElementById("rename").href =
+        "trail-name.html?trail=" + encodeURIComponent(id);
+
+      const zones = trail.zones || [];
+      zoneList.innerHTML = "";
+      document.getElementById("zonesNote").textContent = zones.length === 0
+        ? "No zones yet. A trail needs at least one before it can be saved."
+        : "Each zone is a place with a sound. Walk into it and the sound plays.";
+
+      zones.forEach(function (zone, index) {
+        const wrong = zoneProblems(zone);
+        const link = document.createElement("a");
+        link.href = "zone.html?trail=" + encodeURIComponent(id) +
+          "&zone=" + index;
+        if (wrong.length) { link.className = "incomplete"; }
+
+        const name = document.createElement("strong");
+        name.textContent = zone.name || "(not named yet)";
+        const note = document.createElement("span");
+        note.className = "note";
+        note.textContent = wrong.length
+          ? wrong[0].says
+          : String(zone.audio).split("/").pop() + " · " + zone.radius +
+            " metres across";
+
+        link.appendChild(name);
+        link.appendChild(note);
+        const item = document.createElement("li");
+        item.appendChild(link);
+        zoneList.appendChild(item);
+      });
+    }
+
+    Curate.start(draw, function (message) {
+      Curate.showProblems(problems, [{ says: message }]);
+    });
+
+    // A new zone is created empty and opened straight away, so the
+    // questions get asked rather than guessed at.
+    document.getElementById("addZone").addEventListener("click", function () {
+      let where = 0;
+      Curate.update(function (trails) {
+        const zones = trails[id].zones || (trails[id].zones = []);
+        zones.push({ radius: 30 });
+        where = zones.length - 1;
+      });
+      Curate.go("zone.html?trail=" + encodeURIComponent(id) +
+        "&zone=" + where + "&new=yes");
+    });
+
+    document.getElementById("save").addEventListener("click", function () {
+      const button = document.getElementById("save");
+      button.disabled = true;
+      result.hidden = false;
+      result.className = "working";
+      result.textContent = "Saving…";
+
+      Curate.save(function (answer) {
+        button.disabled = false;
+        if (answer.problems) {
+          result.hidden = true;
+          Curate.showProblems(problems, answer.problems);
+          return;
+        }
+        if (answer.error) {
+          result.hidden = true;
+          Curate.showProblems(problems, [{ says: answer.error }]);
+          // Somebody else saved first. Retrying can never work — this
+          // browser is still holding the older version — so offer the
+          // only thing that does: throw this copy away and start from
+          // theirs. Said plainly, because it does mean losing changes.
+          if (answer.conflict) {
+            const escape = document.createElement("button");
+            escape.className = "danger";
+            escape.textContent = "Throw away my changes and get the latest";
+            escape.addEventListener("click", function () {
+              const sure = window.confirm(
+                "Your unsaved changes to this trail will be lost, and " +
+                "you will get whatever the other person saved.\n\n" +
+                "Carry on?");
+              if (!sure) { return; }
+              Curate.discard();
+              location.reload();
+            });
+            problems.appendChild(escape);
+          }
+          return;
+        }
+        problems.hidden = true;
+        result.className = "panel";
+        result.innerHTML = "";
+        const heading = document.createElement("h1");
+        heading.textContent = "Trail saved";
+        const line = document.createElement("p");
+        line.textContent = "It will be live in about a minute.";
+        result.appendChild(heading);
+        result.appendChild(line);
+
+        const listen = document.getElementById("listen");
+        listen.innerHTML = "";
+        listen.appendChild(document.createTextNode("Walkers hear this trail at "));
+        const link = document.createElement("a");
+        link.href = "index.html?trail=" + encodeURIComponent(id);
+        link.textContent = location.origin + location.pathname
+          .replace(/trail\.html$/, "index.html") + "?trail=" + id;
+        listen.appendChild(link);
+
+        if (answer.warning) {
+          const notice = document.createElement("p");
+          notice.className = "notice";
+          notice.textContent = answer.warning;
+          result.parentNode.insertBefore(notice, result.nextSibling);
+        }
+        draw();
+      });
+    });
+  </script>
+
+</body>
+</html>

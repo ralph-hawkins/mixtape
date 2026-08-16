@@ -1,109 +1,201 @@
 /* =====================================================================
-   How the curator tool looks.
+   The curator tool.
 
-   Kept in the order the rules were written in, because CSS settles ties
-   by source order — two rules of equal weight, and the later one wins.
-   Shuffling these into prettier groups could quietly change what the
-   page looks like, so the grouping below is comments only.
+   Built on the GOV.UK Design System's patterns — one thing per page,
+   the question as the heading, hint text under it, one obvious green
+   button, errors summarised at the top and repeated beside the field.
+   Those patterns are open source and have been tested on more people
+   than this project will ever reach, so there is no sense inventing
+   our own.
 
-   Built for a phone first. Curators record sounds on one and will
-   almost always be standing somewhere when they use this.
+   The look is borrowed, the identity is not: no crown, no GOV.UK
+   wording, and the system font rather than GDS Transport, which is
+   licensed for government services only. This is Mixtape's tool and
+   should never be mistaken for a government one.
+
+   Everything is sized for a thumb. Curators record sounds on a phone
+   and will usually be standing up somewhere when they use this.
    ===================================================================== */
 
-/* --- The page ------------------------------------------------------ */
+:root {
+  --ink: #0b0c0c;
+  --grey: #505a5f;
+  --line: #b1b4b6;
+  --green: #00703c;
+  --green-dark: #002d18;
+  --red: #d4351c;
+  --blue: #1d70b8;
+  --focus: #ffdd00;
+  --light: #f3f2f1;
+}
+
+* { box-sizing: border-box; }
 
 body {
-  font-family: system-ui, -apple-system, sans-serif;
-  margin: 0; padding: 1.2em; line-height: 1.5;
-  max-width: 34em; color: #111;
-}
-h1 { font-size: 1.5em; margin: 0 0 0.2em; }
-.lead { color: #444; margin-top: 0; }
-
-/* --- Questions and answers ----------------------------------------- */
-
-label { display: block; font-weight: 600; margin: 1.2em 0 0.3em; }
-.hint { font-weight: 400; color: #555; font-size: 0.9em; }
-
-/* 16px is not a style choice: anything smaller and an iPhone zooms the
-   whole page in when the box is tapped, which is horrible to use. */
-input[type=text], input[type=password], input[type=file],
-input[type=number] {
-  font-size: 16px; padding: 0.6em; width: 100%;
-  box-sizing: border-box; border: 1px solid #999; border-radius: 4px;
+  font-family: system-ui, -apple-system, "Segoe UI", Arial, sans-serif;
+  font-size: 19px; line-height: 1.32;
+  color: var(--ink); background: #fff;
+  margin: 0; padding: 0;
 }
 
-/* --- Buttons -------------------------------------------------------- */
-
-button {
-  font-size: 17px; padding: 0.8em 1.2em; margin-top: 1.4em;
-  width: 100%; border: 0; border-radius: 4px;
-  background: #1a6e1a; color: #fff; font-weight: 600;
+/* A masthead, so it is always obvious which tool this is. */
+.masthead {
+  background: var(--ink); color: #fff;
+  padding: 0.7em 1em; font-weight: 700;
 }
-button[disabled] { background: #999; }
+.masthead a { color: #fff; text-decoration: none; }
 
-/* --- Telling people what happened ----------------------------------- */
+.page { max-width: 36em; margin: 0 auto; padding: 1em 1em 4em; }
 
-#result { margin-top: 1.2em; padding: 0.9em 1em; border-radius: 4px; }
-.good { background: #e6f4e6; border-left: 4px solid #1a6e1a; }
-.bad  { background: #fdeaea; border-left: 4px solid #b30000; }
-.busy { background: #eef2f7; border-left: 4px solid #4a6c8f; }
+h1 { font-size: 1.8em; line-height: 1.1; margin: 0.6em 0 0.7em; }
+h2 { font-size: 1.3em; line-height: 1.2; margin: 1.6em 0 0.6em; }
+h3 { font-size: 1.05em; margin: 1.2em 0 0.4em; }
+p { margin: 0 0 1em; }
 
-.setup {
-  background: #fff6e5; border-left: 4px solid #d97706;
-  padding: 0.9em 1em; margin-bottom: 1.5em;
+a { color: var(--blue); }
+a:visited { color: #4c2c92; }
+a:hover { color: #003078; }
+
+/* Everything focusable gets the same loud yellow marker. Losing track
+   of where you are on a form is miserable on a phone. */
+a:focus, button:focus, input:focus, select:focus, summary:focus {
+  outline: 3px solid transparent;
+  background-color: var(--focus);
+  box-shadow: 0 -2px var(--focus), 0 4px var(--ink);
+  color: var(--ink);
+  text-decoration: none;
 }
-#added { padding-left: 1.2em; color: #333; font-size: 0.95em; }
-footer { margin-top: 2.5em; color: #666; font-size: 0.9em; }
+input:focus, select:focus { box-shadow: inset 0 0 0 2px; background: #fff; }
 
-hr { margin: 2.5em 0 1.5em; border: 0; border-top: 1px solid #ddd; }
-select { font-size: 16px; padding: 0.5em; width: 100%;
-         box-sizing: border-box; border: 1px solid #999;
-         border-radius: 4px; }
+/* --- Getting back ---------------------------------------------------- */
 
-#trailStatus { margin: 1em 0; padding: 0.9em 1em; border-radius: 4px; }
-#trailResult { margin-top: 1.2em; padding: 0.9em 1em; border-radius: 4px; }
-
-/* Quieter buttons, so "Save the trail" stays the obvious one.
-   These come after the plain button rule on purpose — same weight, so
-   whichever is written last is the one that applies. */
-button.secondary {
-  background: #fff; color: #1a4f7a; border: 1px solid #1a4f7a;
-  font-weight: 600; margin-top: 0.8em;
+.back {
+  display: inline-block; margin: 0.8em 0 0;
+  color: var(--ink); font-size: 0.85em;
 }
-button.danger {
-  background: #fff; color: #b30000; border: 1px solid #b30000;
-}
+.back::before { content: "\2039  "; }
 
-/* --- The zones ------------------------------------------------------ */
+/* --- Asking a question ----------------------------------------------- */
 
-/* A list of things to tap rather than a wide table — a table of
-   settings is unusable on the phone curators carry. */
-#zoneList { list-style: none; padding: 0; margin: 1em 0 0; }
-#zoneList li { margin-bottom: 0.5em; }
-#zoneList button {
-  width: 100%; margin: 0; text-align: left; font-weight: 400;
-  font-size: 16px; padding: 0.7em 0.9em;
-  background: #f4f6f8; color: #111; border: 1px solid #dde3e8;
+/* On a page that asks one thing, the question IS the heading — so it
+   is never read out or skimmed twice. */
+label.question, legend.question {
+  display: block; font-size: 1.8em; font-weight: 700;
+  line-height: 1.1; margin: 0.6em 0 0.3em; padding: 0;
 }
-#zoneList button.chosen {
-  background: #e8f1fb; border-color: #1a4f7a; font-weight: 600;
-}
-#zoneList .where { color: #555; font-size: 0.85em; font-weight: 400; }
+.hint { color: var(--grey); margin: 0 0 0.6em; font-size: 0.95em; }
 
-#zoneEditor {
-  border: 1px solid #dde3e8; border-radius: 6px;
-  padding: 0.2em 1em 1.2em; margin-top: 1.2em; background: #fbfcfd;
-}
-#zoneEditor h3 { margin-bottom: 0; }
+fieldset { border: 0; padding: 0; margin: 0; }
 
-/* Latitude and longitude side by side — they are one answer. */
+input[type=text], input[type=password], input[type=number],
+input[type=file], select, textarea {
+  font-family: inherit; font-size: 1em;
+  width: 100%; padding: 0.5em;
+  border: 2px solid var(--ink); border-radius: 0;
+  background: #fff; color: var(--ink);
+  margin-bottom: 0.4em;
+}
+select { height: 2.4em; }
+
+/* Two boxes that are really one answer. */
 .pair { display: flex; gap: 0.6em; }
 .pair input { flex: 1; min-width: 0; }
 
-audio { width: 100%; margin-top: 0.6em; }
+/* --- Choosing from a few options ------------------------------------- */
 
-/* Notes that appear only when there is something to say, rather than
+.choice {
+  display: block; position: relative;
+  padding: 0.8em 0.8em 0.8em 3em;
+  margin-bottom: 0.6em; background: var(--light);
+  border: 2px solid transparent; cursor: pointer;
+}
+.choice input { position: absolute; left: 0.8em; top: 1em;
+                width: 1.4em; height: 1.4em; margin: 0; }
+.choice:has(input:checked) { border-color: var(--ink); background: #fff; }
+.choice .note { display: block; color: var(--grey); font-size: 0.9em;
+                margin-top: 0.2em; }
+
+/* --- Buttons --------------------------------------------------------- */
+
+button, .button {
+  display: block; width: 100%; text-align: center;
+  font-family: inherit; font-size: 1em; font-weight: 700;
+  padding: 0.65em 1em; margin: 1.2em 0 0;
+  border: 2px solid transparent; border-radius: 0; cursor: pointer;
+  background: var(--green); color: #fff; text-decoration: none;
+  box-shadow: 0 2px 0 var(--green-dark);
+}
+button:active, .button:active { top: 2px; box-shadow: none; }
+button[disabled] { opacity: 0.5; cursor: default; }
+
+button.secondary, .button.secondary {
+  background: var(--light); color: var(--ink);
+  box-shadow: 0 2px 0 #929191;
+}
+button.danger {
+  background: var(--red); color: #fff; box-shadow: 0 2px 0 #55150b;
+}
+
+/* --- Lists of things to pick ----------------------------------------- */
+
+.cards { list-style: none; padding: 0; margin: 1em 0 0; }
+.cards li { margin-bottom: 0.6em; }
+.cards a {
+  display: block; padding: 0.9em 1em; background: var(--light);
+  color: var(--ink); text-decoration: none; border-left: 5px solid var(--ink);
+}
+.cards a:hover { background: #e8e6e4; }
+.cards strong { display: block; font-size: 1.05em; }
+.cards .note { color: var(--grey); font-size: 0.9em; }
+.cards a.incomplete { border-left-color: var(--red); }
+
+/* --- Check your answers ---------------------------------------------- */
+
+.summary { margin: 1em 0 0; border-top: 1px solid var(--line); }
+.summary .row {
+  display: flex; flex-wrap: wrap; gap: 0.3em 1em;
+  padding: 0.8em 0; border-bottom: 1px solid var(--line);
+}
+.summary .key { font-weight: 700; flex: 1 1 8em; }
+.summary .value { flex: 2 1 10em; }
+.summary .change { flex: 0 0 auto; text-align: right; }
+.summary .missing { color: var(--red); font-weight: 700; }
+
+/* --- Saying what happened -------------------------------------------- */
+
+.problem {
+  border: 5px solid var(--red); padding: 1em; margin: 1em 0;
+}
+.problem h2 { margin-top: 0; font-size: 1.2em; }
+.problem ul { margin: 0; padding-left: 1.2em; }
+.problem a { color: var(--red); }
+
+.field-problem { color: var(--red); font-weight: 700; margin: 0 0 0.4em; }
+.has-problem { border-left: 5px solid var(--red); padding-left: 0.9em; }
+
+.panel {
+  background: var(--green); color: #fff;
+  padding: 1.4em 1em; text-align: center; margin: 1em 0;
+}
+.panel h1 { margin: 0 0 0.3em; color: #fff; }
+
+.inset { border-left: 5px solid var(--line); padding: 0.2em 0 0.2em 1em;
+         margin: 1em 0; color: var(--grey); }
+
+.notice {
+  background: #fff6e5; border-left: 5px solid #d97706;
+  padding: 0.9em 1em; margin: 1em 0;
+}
+.working { color: var(--grey); }
+
+/* A quiet strip that only appears when there is unsaved work. */
+.unsaved {
+  background: #fff6e5; border-bottom: 1px solid #d97706;
+  padding: 0.6em 1em; font-size: 0.9em;
+}
+
+audio { width: 100%; margin: 0.4em 0 0.8em; }
+
+/* Only show these notes when they have something to say, rather than
    leaving a gap where they would have been. */
-#zPreviewNote:empty, #zFadeOutNote:empty { display: none; }
-#zPreviewNote, #zFadeOutNote { margin-top: 0.4em; }
+.when-needed:empty { display: none; }

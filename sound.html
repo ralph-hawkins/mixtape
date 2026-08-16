@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Add a sound — Mixtape</title>
+  <link rel="stylesheet" href="curate.css">
+</head>
+<body>
+
+  <div class="masthead">Mixtape</div>
+
+  <div class="page">
+    <a class="back" id="back" href="trails.html">Back</a>
+    <div id="problems" hidden></div>
+
+    <label class="question" for="file">Which sound do you want to add?</label>
+    <p class="hint">A voice memo, or any sound file from this device.</p>
+    <input type="file" id="file" accept="audio/*">
+
+    <button id="go">Add this sound</button>
+
+    <div id="result" hidden></div>
+    <div id="afterwards" hidden>
+      <a class="button" id="carryOn" href="#">Continue</a>
+      <button class="secondary" id="another">Add another sound</button>
+    </div>
+  </div>
+
+  <script src="trail-file.js"></script>
+  <script src="curate.js"></script>
+  <script>
+    const problems = document.getElementById("problems");
+    const result = document.getElementById("result");
+    const fileBox = document.getElementById("file");
+    const goButton = document.getElementById("go");
+
+    // Where the curator came from, so they can be put back there.
+    const then = Curate.ask("then") || "trails.html";
+    document.getElementById("back").href = then;
+    document.getElementById("carryOn").href = then;
+
+    if (Curate.needsSignIn()) { throw new Error("signing in first"); }
+
+    // readAsDataURL does the encoding for us. Doing it by hand runs
+    // out of memory on a file this size.
+    function readAsBase64(file) {
+      return new Promise(function (resolve, reject) {
+        const reader = new FileReader();
+        reader.onload = function () {
+          const comma = String(reader.result).indexOf(",");
+          resolve(String(reader.result).slice(comma + 1));
+        };
+        reader.onerror = function () {
+          reject(new Error("This device could not read that file."));
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    goButton.addEventListener("click", async function () {
+      const file = fileBox.files[0];
+      if (!file) {
+        Curate.showProblems(problems, [{ says: "Choose a sound to add" }]);
+        return;
+      }
+
+      problems.hidden = true;
+      goButton.disabled = true;
+      result.hidden = false;
+      result.className = "working";
+      result.textContent = "Adding " + file.name + "…";
+
+      let base64;
+      try {
+        base64 = await readAsBase64(file);
+      } catch (error) {
+        goButton.disabled = false;
+        result.hidden = true;
+        Curate.showProblems(problems, [{ says: error.message }]);
+        return;
+      }
+
+      let response, answer;
+      try {
+        response = await fetch(
+          "https://mixtape-save.ralph-026.workers.dev/audio", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            password: Curate.password(), who: Curate.who(),
+            name: file.name, contentBase64: base64
+          })
+        });
+        answer = await response.json();
+      } catch (error) {
+        goButton.disabled = false;
+        result.hidden = true;
+        Curate.showProblems(problems, [{ says: "Could not reach the save " +
+          "service. Check you are online, then try again." }]);
+        return;
+      }
+
+      if (!response.ok) {
+        goButton.disabled = false;
+        result.hidden = true;
+        Curate.showProblems(problems,
+          [{ says: answer.error || "That did not work." }]);
+        return;
+      }
+
+      const savedName = answer.savedName || file.name;
+      result.className = "panel";
+      result.innerHTML = "";
+      const heading = document.createElement("h1");
+      heading.textContent = "Sound added";
+      const line = document.createElement("p");
+      // Say what it was really called. A sound is never allowed to
+      // replace one already there, so it may have been given a number.
+      line.textContent = answer.nameWasTaken
+        ? "Saved as " + savedName + ", because a sound called " +
+          file.name + " was already there."
+        : "Saved as " + savedName + ".";
+      result.appendChild(heading);
+      result.appendChild(line);
+
+      if (answer.warning) {
+        const notice = document.createElement("p");
+        notice.className = "notice";
+        notice.textContent = answer.warning;
+        result.parentNode.insertBefore(notice, result.nextSibling);
+      }
+
+      goButton.hidden = true;
+      fileBox.hidden = true;
+      document.querySelector("label.question").hidden = true;
+      document.querySelectorAll(".hint").forEach(function (h) { h.hidden = true; });
+      document.getElementById("afterwards").hidden = false;
+    });
+
+    document.getElementById("another").addEventListener("click", function () {
+      location.reload();
+    });
+  </script>
+
+</body>
+</html>

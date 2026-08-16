@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Your trails — Mixtape</title>
+  <link rel="stylesheet" href="curate.css">
+</head>
+<body>
+
+  <div class="masthead">Mixtape</div>
+
+  <div class="page">
+    <div id="problems" hidden></div>
+
+    <h1>Your trails</h1>
+    <p class="working" id="status">Loading…</p>
+
+    <ul class="cards" id="list"></ul>
+
+    <a class="button secondary" href="trail-name.html">Add a new trail</a>
+
+    <p class="inset" id="unsavedNote" hidden>
+      You have changes that have not been saved. Open the trail you were
+      working on and save it.
+    </p>
+  </div>
+
+  <script src="trail-file.js"></script>
+  <script src="curate.js"></script>
+  <script>
+    const problems = document.getElementById("problems");
+    const status = document.getElementById("status");
+    const list = document.getElementById("list");
+
+    Curate.start(function () {
+      const all = Curate.trails();
+      const ids = Object.keys(all);
+      status.textContent = ids.length === 0
+        ? "There are no trails yet."
+        : "Choose a trail to work on.";
+      document.getElementById("unsavedNote").hidden = !Curate.changed();
+
+      ids.forEach(function (id) {
+        const trail = all[id];
+        const count = (trail.zones || []).length;
+        const wrong = trailProblems({ [id]: trail }).length;
+
+        const link = document.createElement("a");
+        link.href = "trail.html?trail=" + encodeURIComponent(id);
+        // A trail that could not be played is marked, so nobody has to
+        // open every one to find out which needs attention.
+        if (wrong) { link.className = "incomplete"; }
+
+        const name = document.createElement("strong");
+        name.textContent = trail.name || "(no name)";
+        const note = document.createElement("span");
+        note.className = "note";
+        note.textContent = (count === 0 ? "No zones yet"
+          : count + (count === 1 ? " zone" : " zones")) +
+          (wrong ? " — needs finishing" : "");
+
+        link.appendChild(name);
+        link.appendChild(note);
+        const item = document.createElement("li");
+        item.appendChild(link);
+        list.appendChild(item);
+      });
+    }, function (message) {
+      status.textContent = "";
+      Curate.showProblems(problems, [{ says: message }]);
+    });
+  </script>
+
+</body>
+</html>
