@@ -108,7 +108,7 @@ const trails = {
         "name": "Arndell Place",
         "lat": 51.213981,
         "lon": -0.80231,
-        "radius": 90,
+        "radius": 50,
         "audio": "assets/audio/juanita-finds-mittelholzer-01.mp3"
       },
       {
