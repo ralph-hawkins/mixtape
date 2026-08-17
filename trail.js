@@ -87,6 +87,15 @@ const trails = {
         "radius": 30,
         "audio": "assets/audio/golden-synth-drone.mp3",
         "exit": "finish"
+      },
+      {
+        "name": "The Borough",
+        "lat": 51.215257,
+        "lon": 0.798303,
+        "radius": 40,
+        "audio": "assets/audio/edgar-interview.mp3",
+        "loop": true,
+        "exit": "finish"
       }
     ]
   }
