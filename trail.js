@@ -48,6 +48,13 @@ const trails = {
         "plays": 2,
         "fadeIn": 10,
         "fadeOut": 0
+      },
+      {
+        "name": "Foo",
+        "lat": 51.461151,
+        "lon": 0.009809,
+        "radius": 30,
+        "audio": "assets/audio/test-004-2.m4a"
       }
     ]
   }
