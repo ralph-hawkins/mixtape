@@ -106,22 +106,22 @@ const trails = {
       },
       {
         "name": "Arndell Place",
-        "lat": 51.213988,
-        "lon": -0.802273,
+        "lat": 51.214021,
+        "lon": 0.802204,
         "radius": 30,
         "audio": "assets/audio/juanita-finds-mittelholzer-01.mp3"
       },
       {
         "name": "Farnham Library",
-        "lat": 51.213426,
-        "lon": 0.803089,
+        "lat": 51.213433,
+        "lon": -0.80308,
         "radius": 30,
         "audio": "assets/audio/set-up-of-haunted-flute-01.mp3"
       },
       {
         "name": "Gardens",
-        "lat": 51.213022,
-        "lon": -0.802976,
+        "lat": 51.213045,
+        "lon": -0.803019,
         "radius": 30,
         "audio": "assets/audio/flute-3-jam-01.mp3"
       }
