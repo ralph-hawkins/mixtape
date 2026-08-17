@@ -117,6 +117,13 @@ const trails = {
         "lon": 0.803089,
         "radius": 30,
         "audio": "assets/audio/set-up-of-haunted-flute-01.mp3"
+      },
+      {
+        "name": "Gardens",
+        "lat": 51.213084,
+        "lon": 0.803076,
+        "radius": 30,
+        "audio": "assets/audio/flute-3-jam-01.mp3"
       }
     ]
   }
