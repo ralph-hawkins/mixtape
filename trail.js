@@ -55,6 +55,13 @@ const trails = {
         "lon": 0.009809,
         "radius": 30,
         "audio": "assets/audio/test-004-2.m4a"
+      },
+      {
+        "name": "South St",
+        "lat": 51.215153,
+        "lon": 0.796845,
+        "radius": 30,
+        "audio": "assets/audio/golden-synth-drone.mp3"
       }
     ]
   },
@@ -67,6 +74,19 @@ const trails = {
         "lon": -0.022861,
         "radius": 300,
         "audio": "assets/audio/test-003-foo.m4a"
+      }
+    ]
+  },
+  "my-bones-my-flute": {
+    "name": "My bones, my flute",
+    "zones": [
+      {
+        "name": "South St",
+        "lat": 51.215153,
+        "lon": 0.796845,
+        "radius": 30,
+        "audio": "assets/audio/golden-synth-drone.mp3",
+        "exit": "finish"
       }
     ]
   }
