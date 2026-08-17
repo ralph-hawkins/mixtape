@@ -103,6 +103,13 @@ const trails = {
         "lon": 0.800576,
         "radius": 30,
         "audio": "assets/audio/flute-1-jam-01.mp3"
+      },
+      {
+        "name": "Arndell Place",
+        "lat": 51.214021,
+        "lon": 0.802204,
+        "radius": 30,
+        "audio": "assets/audio/juanita-finds-mittelholzer-01.mp3"
       }
     ]
   }
