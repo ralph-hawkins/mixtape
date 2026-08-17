@@ -278,7 +278,10 @@ const Curate = (function () {
     const copy = working();
     if (!copy) { onDone({ error: "There is nothing to save." }); return; }
 
-    const problems = trailProblems(copy.trails);
+    // Only what would actually break a walker stops a save. An
+    // unfinished walk is the curator's business, not a reason to
+    // refuse work they have done somewhere else.
+    const problems = savingProblems(copy.trails);
     if (problems.length > 0) { onDone({ problems: problems }); return; }
 
     fetch(SAVE_SERVICE + "/trail", {

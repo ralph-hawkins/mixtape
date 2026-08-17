@@ -276,11 +276,33 @@ function trailProblems(all) {
   return problems;
 }
 
+// What must stop a save, which is NOT the same as what is unfinished.
+//
+// A walk with no zones is unfinished, but it is also unreachable: the
+// chooser does not offer it, and a link straight to it says plainly
+// that it has no zones. Nobody is misled by it sitting in the file.
+//
+// Blocking on it meant an unfinished walk stopped somebody saving a
+// completely different one — and since a walk could be created but
+// never removed, the only ways out were to finish a walk you did not
+// want or to throw away everything you had done. A real curator met
+// that on their first zone.
+//
+// A broken ZONE is different. The walker's page refuses to build at
+// all if a zone has no position or size, and the trail is saved whole,
+// so it has to be caught before it goes in. Those problems all carry a
+// zone number, which is what this keeps.
+function savingProblems(all) {
+  return trailProblems(all).filter(function (problem) {
+    return problem.zone !== undefined;
+  });
+}
+
 // Available to the pages as plain globals, and read straight off the
 // file by test.mjs. Deliberately not a module: the pages load it with
 // an ordinary script tag, exactly as they load trail.js.
 if (typeof module !== "undefined" && module.exports) {
   module.exports = { ZONE_FIELDS, QUESTION_SETS, trailsToFile, zoneToPlain,
-    isUsableNumber, trailId, zoneProblems, trailProblems,
+    isUsableNumber, trailId, zoneProblems, trailProblems, savingProblems,
     readPosition, soundFileName, ZONE_FAULTS };
 }

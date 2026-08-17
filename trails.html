@@ -19,6 +19,20 @@
     <ul class="cards" id="list"></ul>
 
     <a class="button secondary" href="trail-name.html">Add a trail</a>
+
+    <!-- Every other page saves from inside one walk. Removing a walk
+         leaves you here, with nothing to open and nowhere to press
+         save — and if it was your only walk, nowhere at all. So this
+         page can save too. It appears only when there is something to
+         save, because an idle button that does nothing is worse than
+         no button. -->
+    <div id="saving" hidden>
+      <h2>When you are ready</h2>
+      <p class="hint">Saving puts your changes live. It takes about a
+      minute before a walker would see them.</p>
+      <button id="save">Save your changes</button>
+      <div id="result" role="status" hidden></div>
+    </div>
   </div>
 
   <script src="trail-file.js"></script>
@@ -28,12 +42,16 @@
     const status = document.getElementById("status");
     const list = document.getElementById("list");
 
+    const saving = document.getElementById("saving");
+    const result = document.getElementById("result");
+
     Curate.start(function () {
       const all = Curate.trails();
       const ids = Object.keys(all);
       status.textContent = ids.length === 0
         ? "There are no trails yet."
         : "Choose a trail to work on.";
+      saving.hidden = !Curate.changed();
 
       ids.forEach(function (id) {
         const trail = all[id];
@@ -63,6 +81,41 @@
     }, function (message) {
       status.textContent = "";
       Curate.showProblems(problems, [{ says: message }]);
+    });
+
+    document.getElementById("save").addEventListener("click", function () {
+      const button = document.getElementById("save");
+      button.disabled = true;
+      problems.hidden = true;
+      result.hidden = false;
+      result.className = "working";
+      result.textContent = "Saving…";
+
+      Curate.save(function (answer) {
+        button.disabled = false;
+        if (answer.problems || answer.error) {
+          result.hidden = true;
+          Curate.showProblems(problems,
+            answer.problems || [{ says: answer.error }]);
+          if (answer.conflict) { Curate.offerDiscard(problems); }
+          return;
+        }
+        result.className = "panel";
+        result.innerHTML = "";
+        const heading = document.createElement("h2");
+        heading.textContent = "Saved";
+        const line = document.createElement("p");
+        line.textContent = "It will be live in about a minute.";
+        result.appendChild(heading);
+        result.appendChild(line);
+
+        if (answer.warning) {
+          const notice = document.createElement("p");
+          notice.className = "notice";
+          notice.textContent = answer.warning;
+          result.parentNode.insertBefore(notice, result.nextSibling);
+        }
+      });
     });
   </script>
 

@@ -32,6 +32,8 @@
 
     <div id="result" role="status" hidden></div>
     <p class="inset when-needed" id="listen"></p>
+
+    <button class="danger" id="removeTrail">Remove this walk</button>
   </div>
 
   <script src="trail-file.js"></script>
@@ -101,6 +103,27 @@
       Curate.go("zone.html?trail=" + encodeURIComponent(id) +
         "&zone=" + where + "&new=yes");
     });
+
+    // Until now a walk could be made and never unmade. Somebody who
+    // started one and changed their mind was left with it in their list
+    // for good — and, while an unfinished walk still blocked saving, no
+    // way to get on with anything else either.
+    document.getElementById("removeTrail")
+      .addEventListener("click", function () {
+        const trail = Curate.trails()[id];
+        if (!trail) { return; }
+        const count = (trail.zones || []).length;
+        const sure = window.confirm(
+          "Remove " + (trail.name || "this walk") + "?\n\n" +
+          (count > 0
+            ? "Its " + count + (count === 1 ? " zone goes" : " zones go") +
+              " with it. "
+            : "") +
+          "It is only really gone once you save, from your list of walks.");
+        if (!sure) { return; }
+        Curate.update(function (trails) { delete trails[id]; });
+        Curate.go("trails.html");
+      });
 
     document.getElementById("save").addEventListener("click", function () {
       const button = document.getElementById("save");

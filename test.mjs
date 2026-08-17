@@ -29,7 +29,7 @@ const workerSource = readFileSync(new URL("worker.js", import.meta.url), "utf8")
 // very code the tool runs, not a copy of it.
 const require = createRequire(import.meta.url);
 const { trailsToFile, ZONE_FIELDS, QUESTION_SETS, isUsableNumber, trailId,
-        zoneProblems, trailProblems, readPosition,
+        zoneProblems, trailProblems, savingProblems, readPosition,
         soundFileName, ZONE_FAULTS } = require("./trail-file.js");
 
 // Load worker.js as a module without renaming it or adding a
@@ -441,8 +441,8 @@ section("Knowing whether there is anything to save");
     search: "", pathname: "/mixtape/trail.html", href: "" };
 
   const curateSource = readFileSync(new URL("curate.js", import.meta.url), "utf8");
-  const Curate = new Function("trailsToFile", "trailProblems", "trailId",
-    curateSource + "; return Curate;")(trailsToFile, trailProblems, trailId);
+  const Curate = new Function("trailsToFile", "trailProblems", "savingProblems", "trailId",
+    curateSource + "; return Curate;")(trailsToFile, trailProblems, savingProblems, trailId);
 
   const zone = { name: "West", lat: 51.4, lon: 0.01, radius: 40,
     audio: "assets/audio/a.m4a" };
@@ -522,9 +522,9 @@ section("Knowing whether there is anything to save");
     globalThis.document.getElementById = () => null;
     globalThis.document.querySelector = () => null;
     added = [];
-    new Function("trailsToFile", "trailProblems", "trailId",
+    new Function("trailsToFile", "trailProblems", "savingProblems", "trailId",
       curateSource + "; return Curate;")(
-      trailsToFile, trailProblems, trailId);
+      trailsToFile, trailProblems, savingProblems, trailId);
     return added;
   };
   check("served from the real site, it says nothing about being local",
@@ -571,8 +571,8 @@ section("Saving twice in a row");
     search: "", pathname: "/mixtape/trail.html", href: "" };
 
   const curateSource = readFileSync(new URL("curate.js", import.meta.url), "utf8");
-  const Curate = new Function("trailsToFile", "trailProblems", "trailId",
-    curateSource + "; return Curate;")(trailsToFile, trailProblems, trailId);
+  const Curate = new Function("trailsToFile", "trailProblems", "savingProblems", "trailId",
+    curateSource + "; return Curate;")(trailsToFile, trailProblems, savingProblems, trailId);
   Curate.signIn("Jamie", "correct horse");
 
   // The tool and the save service wired together: curate.js's fetch
@@ -822,6 +822,55 @@ for (const [name, original, expected] of [
 }
 check("the file type is kept, not the name the phone chose",
   soundFileName("Jimmy", "New Recording 3.m4a").endsWith(".m4a"));
+
+// =====================================================================
+section("An unfinished walk does not block a finished one");
+//
+// The fault this is here for: a curator made a second walk, left it
+// empty, and could then not save the zone they had just finished in a
+// different walk. The tool offered no way to remove a walk either, so
+// the only ways out were to finish one they did not want or to throw
+// away everything they had done.
+//
+// A walk with no zones cannot be reached — the chooser does not offer
+// it — so it is unfinished, not dangerous. A broken ZONE is dangerous:
+// the walker's page refuses to build at all.
+// =====================================================================
+const finishedZone = {
+  name: "The clock tower", lat: 51.1469, lon: 0.874, radius: 40,
+  audio: "assets/audio/brass.m4a"
+};
+const unfinishedZone = { name: "Half made" };
+
+const emptyAlongside = {
+  ashford: { name: "Ashford", zones: [finishedZone] },
+  second: { name: "Second trail", zones: [] }
+};
+check("an empty walk is still shown as unfinished",
+  trailProblems(emptyAlongside).length === 1,
+  trailProblems(emptyAlongside)[0] &&
+    trailProblems(emptyAlongside)[0].says);
+check("but it does not stop the finished walk being saved",
+  savingProblems(emptyAlongside).length === 0);
+
+const brokenAlongside = {
+  ashford: { name: "Ashford", zones: [finishedZone] },
+  second: { name: "Second trail", zones: [unfinishedZone] }
+};
+check("a broken zone anywhere still stops a save",
+  savingProblems(brokenAlongside).length > 0);
+check("and every one of those says which zone, so it can be a link",
+  savingProblems(brokenAlongside).every(function (problem) {
+    return problem.trail !== undefined && problem.zone !== undefined &&
+           problem.field !== undefined;
+  }));
+
+check("a walk with no name is not a reason to refuse a save",
+  savingProblems({ x: { zones: [finishedZone] } }).length === 0);
+check("nothing at all is saveable",
+  savingProblems({}).length === 0);
+check("a finished walk on its own is saveable",
+  savingProblems({ a: { name: "A", zones: [finishedZone] } }).length === 0);
 
 // =====================================================================
 section("Every question writes to a setting that exists");
