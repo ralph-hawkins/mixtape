@@ -110,6 +110,13 @@ const trails = {
         "lon": 0.802204,
         "radius": 30,
         "audio": "assets/audio/juanita-finds-mittelholzer-01.mp3"
+      },
+      {
+        "name": "Farnham Library",
+        "lat": 51.213426,
+        "lon": 0.803089,
+        "radius": 30,
+        "audio": "assets/audio/set-up-of-haunted-flute-01.mp3"
       }
     ]
   }
