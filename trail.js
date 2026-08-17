@@ -57,6 +57,18 @@ const trails = {
         "audio": "assets/audio/test-004-2.m4a"
       }
     ]
+  },
+  "second-trail-2": {
+    "name": "Second trail",
+    "zones": [
+      {
+        "name": "friend zone",
+        "lat": 51.476306,
+        "lon": -0.022861,
+        "radius": 300,
+        "audio": "assets/audio/test-003-foo.m4a"
+      }
+    ]
   }
 };
 
