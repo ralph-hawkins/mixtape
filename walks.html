@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Choose your walk — Mixtape</title>
+  <!-- The curator tool's stylesheet, borrowed rather than copied. This
+       page is a list you tap, which is exactly what `.cards` already
+       is. A fourth stylesheet holding a second version of that list is
+       how the two start to look different for no reason. -->
+  <link rel="stylesheet" href="curate.css">
+</head>
+<body>
+
+  <div class="masthead">Mixtape</div>
+
+  <div class="page">
+    <div id="problems" hidden></div>
+
+    <h1>Choose your walk</h1>
+    <p>Each one plays sound as you reach certain places along the way.
+    Bring headphones.</p>
+
+    <ul class="cards" id="list"></ul>
+    <p class="hint when-needed" id="status"></p>
+  </div>
+
+  <!-- trail-file.js is here for one function: whether a zone is
+       finished enough to be heard. The walker's page and the curator
+       tool both already ask that question, and a third copy of the
+       answer is how the three of them start to disagree. -->
+  <script src="trail-file.js"></script>
+  <script src="trail.js"></script>
+
+  <script>
+    const list = document.getElementById("list");
+    const status = document.getElementById("status");
+
+    // Everything wrong in one place, above the list. The same shape the
+    // curator tool uses, because it is the same job.
+    const wrong = [];
+
+    // Somebody followed a link to a walk this file does not have.
+    // index.html sends them here saying so, rather than quietly
+    // starting a different walk — which is the one thing worse.
+    if (new URLSearchParams(location.search).get("missing")) {
+      wrong.push("The walk that link points to is not here. It may have " +
+        "been renamed, or taken down. Choose one below instead.");
+    }
+
+    // How many stops of this walk could actually be heard. A walk with
+    // none is not offered: a walker has no use for an unfinished one
+    // and no way to fix it. The curator's own list, on trails.html,
+    // is where an unfinished walk gets flagged to the person who can.
+    function stopsIn(walk) {
+      return (walk.zones || []).filter(function (zone) {
+        return zoneProblems(zone).length === 0;
+      }).length;
+    }
+
+    if (typeof trails === "undefined") {
+      wrong.push("The list of walks could not be loaded. Check you are " +
+        "online, then reload this page.");
+    } else {
+      // File order, so the order a curator sees in their own list is
+      // the order walkers get.
+      const ready = Object.keys(trails).filter(function (id) {
+        return stopsIn(trails[id]) > 0;
+      });
+
+      // A list with nothing in it has to say why, or the page looks
+      // broken rather than empty.
+      status.textContent = ready.length ? ""
+        : (Object.keys(trails).length === 0
+            ? "There are no walks yet."
+            : "No walks are ready yet. Try again another day.");
+
+      ready.forEach(function (id) {
+        const walk = trails[id];
+        const stops = stopsIn(walk);
+
+        const link = document.createElement("a");
+        link.href = "index.html?trail=" + encodeURIComponent(id);
+
+        const name = document.createElement("strong");
+        // Falling back to the short name from the address is ugly, but
+        // an unnamed walk that cannot be tapped is worse.
+        name.textContent = walk.name || id;
+        const note = document.createElement("span");
+        note.className = "note";
+        note.textContent = stops + (stops === 1 ? " stop" : " stops");
+
+        link.appendChild(name);
+        link.appendChild(note);
+        const item = document.createElement("li");
+        item.appendChild(link);
+        list.appendChild(item);
+      });
+    }
+
+    if (wrong.length > 0) {
+      const problems = document.getElementById("problems");
+      problems.hidden = false;
+      problems.className = "problem";
+      const heading = document.createElement("h2");
+      heading.textContent = wrong.length === 1
+        ? "There is a problem" : "There are problems";
+      problems.appendChild(heading);
+      const items = document.createElement("ul");
+      wrong.forEach(function (says) {
+        const item = document.createElement("li");
+        item.textContent = says;
+        items.appendChild(item);
+      });
+      problems.appendChild(items);
+    }
+  </script>
+
+</body>
+</html>

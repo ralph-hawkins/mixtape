@@ -5,6 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Mixtape</title>
 
+  <!-- Which walk is this? The rule lives further down, where the trail
+       file has arrived and the answer can be checked properly. This is
+       the same rule, run early for the common case: somebody who opened
+       the plain address named no walk at all, and nothing on this page
+       can be right until they pick one. Sending them now saves them
+       waiting on the map library below, which is fetched from another
+       website and is the slowest thing here. -->
+  <script>
+    if (!new URLSearchParams(location.search).get("trail")) {
+      location.replace("walks.html");
+    }
+  </script>
+
   <!-- Leaflet, the same map library map.html uses — pinned to the
        same version. -->
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
@@ -81,6 +94,28 @@
     if (typeof trail === "undefined") {
       stopWithTrailProblem(
         "trail.js failed to load — check the file for typos");
+    }
+
+    // Which walk this is. The name comes from the web address, so one
+    // link can point straight at one walk.
+    //
+    // If the address names no walk, or names one the file does not
+    // have — renamed, or taken down since the link was shared — we
+    // cannot know which was meant. trail.js falls back to whichever is
+    // first in the file, which would quietly start the wrong walk with
+    // nothing on screen to say so. Hand over the list instead.
+    //
+    // Guarded on `trails` so a hand-written file holding a single
+    // `trail` and no list still works exactly as it always did.
+    const askedFor = new URLSearchParams(location.search).get("trail");
+    if (typeof trails !== "undefined" && trails &&
+        (!askedFor || !trails[askedFor])) {
+      location.replace("walks.html" +
+        (askedFor ? "?missing=" + encodeURIComponent(askedFor) : ""));
+      // replace() does not stop this script. Without throwing, the
+      // engine below would spend its last moment setting up the wrong
+      // walk — and it is the part that starts audio.
+      throw new Error("that walk is not here — choosing another");
     }
 
     // A trail with no zones is not a trail. The map cannot frame
