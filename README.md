@@ -1,171 +1,202 @@
 # Mixtape
 
-A walking trail of sound. You open a web page on your phone, tap
-Start, and as you walk, audio plays in the right places. There is
-no app to install — it works in Safari and Chrome.
+A walking trail of sound. You open a web page on your phone, tap Start,
+and as you walk, audio plays in the right places. There is no app to
+install — it works in Safari and Chrome.
 
-This guide explains what the app does and how to change the trail
-yourself. You do not need any tools installed. You edit one file on
-this website (github.com) and the live trail updates about a minute
-later.
+A static site: no build step, no database. The only moving part is a
+small save service, so that people who curate walks never have to touch
+this repository.
 
-## What the app does
+## The addresses
 
-The trail is a set of **zones**. A zone is three things:
+| To | Go to |
+|---|---|
+| Choose a walk | `https://ralph-hawkins.github.io/mixtape/` |
+| Open one walk straight away | `https://ralph-hawkins.github.io/mixtape/index.html?trail=<name>` |
+| Build a walk | `https://ralph-hawkins.github.io/mixtape/curate.html` |
+| See a walk on a map, no audio | `https://ralph-hawkins.github.io/mixtape/map.html?trail=<name>` |
 
-- a spot on the map
-- a radius in metres around it
-- an audio track
+Without a `?trail=` the walker's page hands over to the chooser rather
+than guessing which walk was meant.
 
-Walk into a zone and its track plays. What happens while you stand
-there, and when you walk out, is up to the zone's settings — see
-the table below.
+## If you are here to curate a walk
 
-The page shows a map of the trail. Each zone is a circle:
+**Use the tool, not this repository.** Everything a curator needs —
+adding sounds, placing zones, changing settings, publishing — is at
+`curate.html`, on a phone, with a password and no GitHub account.
+
+Do not edit `trail.js` by hand and do not upload audio through
+github.com. Earlier versions of this file explained how to do both.
+That route is a dead end for a curator: GitHub does not offer uploads
+to people who are not collaborators, a curator hit exactly that wall,
+and there is no way round it from inside GitHub. The tool exists so
+that wall is never met.
+
+`trail.js` is now written by the tool. Anything you hand-edit there,
+including comments, is overwritten the next time anybody saves.
+
+## How a walk works
+
+A walk is a set of **zones**. A zone is a spot, a radius in metres, and
+a sound. Walk into it and the sound plays. Zones may overlap, and two
+sounds playing at once is a thing you can do on purpose.
+
+Each zone has five settings beyond its place, size and sound:
+
+| Setting | What it does |
+|---|---|
+| `loop` | `true` — repeats while somebody stands in the zone. `false` — plays once, then quiet. |
+| `exit` | What happens when they walk out mid-sound. `"stop"` — quiet at once. `"finish"` — the current play-through ends naturally. |
+| `plays` | How many times the sound may start from the top. `"always"` — no limit. A number — that many, then the zone stays quiet and its circle turns grey. Rejoining part way through never uses one up. |
+| `fadeIn` | Seconds to rise from silence. `0` — starts at full volume. |
+| `fadeOut` | Seconds to die away after leaving a `"stop"` zone. `0` — cuts off at once. `"finish"` zones ignore it. |
+
+Fades are worth using. GPS wobbles at the edge of a zone, and a hard cut
+makes that wobble audible.
+
+### What the walker sees
+
+The map draws a circle per zone, and a dot for the walker with a faint
+ring showing how sure the phone is. The circles change colour:
 
 - **blue** — quiet
 - **green** — playing
-- **grey** — finished (it has used up its plays)
-- **orange, with a dashed edge** — broken: its track will not load,
-  so this zone will stay silent until it is fixed
+- **grey** — finished; it has used up its plays
+- **orange, dashed** — its sound will not load, so it will stay silent
 
-Grey and orange are worth telling apart. Grey is a zone that has
-done its job. Orange is a zone that never could.
+Grey and orange are worth telling apart. Grey is a zone that has done
+its job. Orange is one that never could.
 
-The red dot is you. The faint red ring around it is how sure the
-phone is about where you are — everything inside the ring is
-"maybe here". GPS is honest but wobbly.
-
-Below the map are diagnostic read-outs, a table showing every
-zone's state, and a log that records everything that happens,
-newest first. When something sounds wrong, the log usually knows
-why.
-
-## The trail is one file
-
-Everything about the trail lives in [`trail.js`](trail.js). Each
-zone is a block like this:
-
-```js
-{
-  name: "Priory Park - east",
-  lat: 51.461820,
-  lon: 0.012042,
-  radius: 50,
-  audio: "assets/audio/test-005.m4a",
-  loop: true,
-  exit: "finish",
-  plays: 2,
-  fadeIn: 10,
-  fadeOut: 0
-}
-```
-
-What each setting means:
-
-| Setting   | What it does |
-|-----------|--------------|
-| `name`    | The label on the map and in the log. |
-| `lat`, `lon` | Where the zone is. Right-click a spot in Google Maps to copy these, or stand there and read them off the app's Position line. |
-| `radius`  | Size of the zone in metres. |
-| `audio`   | The track to play. The file lives in the `assets/audio` folder. |
-| `loop`    | `true` — the track repeats while someone stands in the zone. `false` — it plays once then goes quiet. |
-| `exit`    | What happens when someone walks out mid-sound. `"stop"` — quiet straight away. `"finish"` — the current play-through ends naturally. |
-| `plays`   | How many times the track may start from the top. "always" — no limit. A number — that many plays, then the zone stays quiet and its circle turns grey. Walking back in mid-track never uses up a play. |
-| `fadeIn`  | Seconds for the sound to rise from silence when it starts. 0 — starts at full volume. |
-| `fadeOut` | Seconds for the sound to die away after leaving a "stop" zone. 0 — cuts off at once. "finish" zones ignore this. |
-
-## How to make a change
-
-1. Open [`trail.js`](trail.js) and click the pencil icon (top
-   right of the file) to edit it.
-2. Change a value — a radius, a fade, a track.
-3. Scroll down and select **Commit changes**. A short note about
-   what you changed is helpful but not required.
-4. Wait about a minute while the site republishes.
-5. Refresh the page on your phone. Check the **Page published**
-   time near the top — if it is from before your change, refresh
-   again.
-6. Tap Start and listen.
-
-That is the whole loop: edit, wait a minute, refresh, hear the
-difference.
-
-## Adding a new zone
-
-Copy an existing zone — from its opening `{` to its closing `}` —
-paste it below the last one, and change the values. Every zone
-needs a comma after its closing `}` except the last one.
-
-To add a new audio track: open the `assets/audio` folder, select
-**Add file → Upload files**, and upload it. Voice memos (`.m4a`)
-work well. Then point a zone's `audio` setting at it.
-
-Please do not upload commercial music — the repository is public.
+Below the map are read-outs, a table of every zone's state, and a log of
+everything that happened, newest first. When a walk does not sound
+right, the log usually knows why.
 
 ## When something goes wrong
 
-The page tells you in one of two ways.
+A fault that stops the whole walk **replaces the map with a message**:
 
-A mistake that stops the whole trail **replaces the map with a
-message**. Nothing runs until it is fixed.
+- **"trail.js failed to load — check the file for typos"** — the file is
+  not valid JavaScript.
+- **"trail.js has no zones — a trail needs at least one"** — the list is
+  empty.
+- **"Cattle Market — its lat is missing or is not a number"** — that
+  zone has no `lat`, `lon` or `radius`, or has something that is not a
+  number. The message names the zone and the setting.
 
-A mistake affecting one zone **adds a line to the log** at the
-bottom of the page, newest first. The rest of the trail carries on.
+A fault affecting one zone **adds a line to the log**, and the rest of
+the walk carries on:
 
-### Messages that replace the map
+- **"track will not load"** — the `audio` setting points at a file that
+  is not there. Appears as the page opens, before anybody walks
+  anywhere.
+- **"play failed"** or **"could not be unlocked"** — the file exists but
+  the phone would not play it. Usually a weak signal.
+- **"position failed: …"** — the phone would not say where it is. The
+  message names which of the three reasons it was.
 
-**"trail.js failed to load — check the file for typos"**
+If a zone stays silent and the log says nothing about it, it was never
+entered. Compare the distance in the zone table against its radius.
 
-Something in the file is not valid. Nearly always a missing comma,
-quote mark or curly bracket. Check your last edit. Remember every
-zone needs a comma after its closing `}` except the last one.
+## The files
 
-**"trail.js has no zones — a trail needs at least one"**
+| File | What it is |
+|---|---|
+| `index.html` | The walker's page: map, read-outs, log, and the playback engine. |
+| `walks.html` | The chooser. Reads the same trail file and lists every walk that can be heard. |
+| `map.html` | The trail on a map with no audio and no Start. |
+| `trail.js` | Every walk and every zone. Written by the tool. |
+| `curate.html` … `zone-edit.html` | The curator tool: sign in, trails, trail, zone, zone setting, add a sound. One question per page. |
+| `curate.js` | The bits every tool page needs — the working copy, saving, the unsaved-changes strip. |
+| `trail-file.js` | Reading and writing `trail.js`, and deciding whether a walk is fit to save. Shared by the tool, the chooser and the tests. |
+| `worker.js` | The save service. |
+| `test.mjs` | The tests. |
+| `layers.html` | A test rig for layered songs. Not part of the walk. |
 
-The list of zones is empty — usually the last zone was deleted by
-accident.
+`index.html` and `map.html` load Leaflet from unpkg. Everything else has
+no dependencies.
 
-**"Priory Park - east — its lat is missing or is not a number"**
+## Running it locally
 
-That zone has no `lat`, `lon` or `radius`, or has something that is
-not a number where one should be. The message names the zone and
-the setting. A zone with no `name` is called by its place in the
-file, so "zone 2" is the second one down.
+Serve the folder over HTTP — opening the files directly will not work,
+because the pages load `trail.js` with a script tag.
 
-### Lines in the log
+```
+python3 -m http.server 8000
+```
 
-**"track will not load"**
+Then open `http://localhost:8000/`. Geolocation needs either
+`localhost` or https, which is why the live site is on GitHub Pages.
 
-The `audio` setting points at a file that is not there. Check the
-spelling, including capital letters, and check the file really was
-uploaded to `assets/audio`. This one appears as soon as you open the
-page — you do not need to tap Start or walk anywhere to see it.
+The curator tool notices it is running locally and says so: the trail it
+shows is the file on your machine, but saving writes to the live
+repository. Run `git pull` first, or you will save an old trail over a
+newer one.
 
-The zone's circle turns orange and dashed, and its row in the Zones
-table says "track will not load". Walking in does nothing and does
-not use up one of the zone's plays.
+## Tests
 
-**"play failed" or "could not be unlocked"**
+```
+node test.mjs
+```
 
-The track exists but the phone would not play it. Usually a weak
-signal: the file had not finished downloading by the time you
-walked in. Try again on a better connection.
+Nothing to install, no build step, and a pretend GitHub instead of the
+real one. It covers `worker.js`, `curate.js` and `trail-file.js` — the
+parts that can fail silently and do not show on the page.
 
-If a zone stays silent and the log says nothing at all, the zone was
-probably never entered. Check the distance in the Zones table
-against the zone's radius.
+Run it after any change to those files, or to how the trail is written.
+
+Every check was confirmed to bite by breaking the thing it guards and
+watching it fail. Keep that habit: a test that cannot fail is worse than
+no test, because it reads like reassurance.
+
+## The save service
+
+`worker.js` is a Cloudflare Worker holding a GitHub token. It is the
+only thing that can write to this repository, and it is what lets a
+curator publish without an account.
+
+Deploy it from this folder:
+
+```
+npx wrangler deploy
+```
+
+Not the dashboard editor. Pasting by hand lets the running service drift
+out of step with `worker.js` while nothing says so.
+
+Its secrets live in Cloudflare, not in `wrangler.toml`, and survive
+every deploy.
+
+**The GitHub token expires on 16 November 2026.** Saving stops working
+that day. `KEY_EXPIRES` in `worker.js` carries the date, and from
+21 days out every successful save warns the curator. Renewing the token
+means changing that date and deploying again, or the warning lies.
+
+### Rules that must not be weakened
+
+All enforced in the Worker, never in the browser:
+
+- **Path allowlist** — `assets/audio/*` and `trail.js`, nothing else.
+  Without it the curator password could write `.github/workflows/`,
+  which is code execution in the repository owner's account. This is the
+  most important line in the project.
+- **Audio file extensions only** — an uploaded `.html` would be a page
+  hosted on this domain.
+- Filenames stripped of any path, and a 15 MB ceiling.
+
+Preview URLs are off on purpose. They would give every past version of
+the Worker a permanent public address with the same keys.
 
 ## Things worth knowing
 
-- Values like `"stop"`, `"finish"` and `"always"` need their quote
-  marks. Numbers and `true`/`false` do not.
-- GPS is accurate to roughly 5–20 metres and wobbles at zone
-  boundaries. Keep radii generous — 20 metres is about as small
-  as is reliable. Fades make the wobble much less noticeable.
-- The audio only starts after the Start tap. That is a phone
-  browser rule, not a choice — sound must begin with a touch.
-- [`map.html`](map.html) shows the trail on a map without starting
-  any audio — useful for a quick look at where the zones are.
-- Play counts reset when the page is refreshed. "Plays once, ever,
-  across days" is not a thing the app does yet.
+- GPS is accurate to roughly 5–20 metres and wobbles at zone boundaries.
+  Twenty metres is about as small as a radius can usefully be.
+- Audio can only start after a tap. That is a phone browser rule, not a
+  choice, which is why every walk starts with a Start button.
+- iPhones ignore volume set directly on an audio element, so fades go
+  through the Web Audio API. If that is missing, a zone plays at full
+  volume with hard cuts and the log names it — degraded, never silent
+  without a suspect.
+- Play counts live in the page. A refresh resets them. "Once ever,
+  across days" would need storage on the device and is not built.
+- Do not commit commercial music. This repository is public.
