@@ -17,6 +17,30 @@
 const ZONE_FIELDS = ["name", "lat", "lon", "radius", "audio",
   "loop", "exit", "plays", "fadeIn", "fadeOut"];
 
+// Which settings each of the tool's questions writes to.
+//
+// Most questions are named after their setting, but not all: "size"
+// writes `radius`, "sound" writes `audio`, and "where" writes both
+// halves of a position at once.
+//
+// This lives here, next to the list above it has to agree with, rather
+// than in the page that uses it — because getting it wrong is silent.
+// A question that writes to a name nothing reads loses the curator's
+// answer on the way to the file, leaves the old value in place, and
+// still lets the tool say "Saved". That is exactly what "size" did.
+// test.mjs now checks the two lists against each other.
+const QUESTION_SETS = {
+  name: ["name"],
+  sound: ["audio"],
+  where: ["lat", "lon"],
+  size: ["radius"],
+  loop: ["loop"],
+  exit: ["exit"],
+  plays: ["plays"],
+  fadeIn: ["fadeIn"],
+  fadeOut: ["fadeOut"]
+};
+
 const FILE_HEADER =
   "// =================================================================\n" +
   "// The trail definition.\n" +
@@ -256,7 +280,7 @@ function trailProblems(all) {
 // file by test.mjs. Deliberately not a module: the pages load it with
 // an ordinary script tag, exactly as they load trail.js.
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { ZONE_FIELDS, trailsToFile, zoneToPlain,
+  module.exports = { ZONE_FIELDS, QUESTION_SETS, trailsToFile, zoneToPlain,
     isUsableNumber, trailId, zoneProblems, trailProblems,
     readPosition, soundFileName, ZONE_FAULTS };
 }

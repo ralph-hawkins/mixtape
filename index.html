@@ -709,10 +709,24 @@
 
         // Runs if we don't — permission refused, no signal, etc.
         // Showing the reason on the page is the diagnostic bit.
+        //
+        // The reason has to come from the code, not the browser's own
+        // `message`. That message is whatever the browser feels like
+        // saying and is very often nothing at all — which left this
+        // page reading "failed:" and the log reading "position
+        // failed:", the exact silence both of them exist to break.
         function (error) {
-          document.getElementById("updated").textContent =
-            "failed: " + error.message;
-          logEvent("position failed: " + error.message);
+          const REASONS = {
+            1: "permission refused — allow location for this site, " +
+               "then reload",
+            2: "no position available — the phone cannot see enough " +
+               "satellites or masts",
+            3: "timed out waiting for a position"
+          };
+          const why = REASONS[error.code] || error.message ||
+            "the browser did not say why";
+          document.getElementById("updated").textContent = "failed: " + why;
+          logEvent("position failed: " + why);
         },
 
         // Ask for the best fix the device can give (real GPS on a

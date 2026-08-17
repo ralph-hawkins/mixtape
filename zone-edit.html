@@ -337,23 +337,32 @@
       loop: false, exit: "stop", plays: "always", fadeIn: 0, fadeOut: 0
     };
 
-    // What to write back into the zone. Most questions set one setting;
-    // "where" sets two, because they are one answer.
+    // What to write back into the zone.
+    //
+    // A question is not always named after the setting it writes:
+    // "size" writes `radius`, "sound" writes `audio`. That pairing is
+    // kept in trail-file.js, beside the list of settings it has to
+    // agree with, because writing to a name nothing reads is silent —
+    // the answer is dropped on the way to the file and the tool still
+    // says "Saved".
     function apply(zone, answer) {
+      // The one question that sets two settings, because a position is
+      // a single answer.
       if (field === "where") {
         zone.lat = answer.lat; zone.lon = answer.lon;
         return;
       }
-      if (field === "sound") { zone.audio = answer; return; }
+
+      const setting = QUESTION_SETS[field][0];
 
       // Opening a question, changing nothing and pressing Continue
       // must not count as a change. Without this, confirming "fade in:
       // 0" on a zone that never had a fade would write it down, and the
       // tool would then insist there was work to save.
-      const absentMeansThis = SAME_AS_ABSENT[field];
-      if (zone[field] === undefined && answer === absentMeansThis) { return; }
+      const absentMeansThis = SAME_AS_ABSENT[setting];
+      if (zone[setting] === undefined && answer === absentMeansThis) { return; }
 
-      zone[field] = answer;
+      zone[setting] = answer;
     }
 
     function backHere() {

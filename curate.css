@@ -35,6 +35,17 @@
       quietly weaken it. Nothing outside that layer may set a focus
       style.
 
+   4. Hidden means hidden, and that gets a layer too, above components.
+      The browser's own rule for the `hidden` attribute is the weakest
+      kind there is, so ANY rule here that sets `display` silently
+      cancels it. That is not theoretical: `button`, `.button` and
+      `label` all set one, so every `thing.hidden = true` in the tool
+      did nothing to them — the sound page finished an upload still
+      showing "Add this sound" and two questions with no boxes under
+      them, and the sound question offered "Continue" when there was
+      nothing to continue with. Layering it makes that impossible
+      rather than merely fixed, for every element and every page.
+
    ---------------------------------------------------------------------
    THE COST OF LAYERS, SAID OUT LOUD
 
@@ -54,7 +65,7 @@
    one rule at a time rather than all of them.
    ===================================================================== */
 
-@layer base, components, focus;
+@layer base, components, hidden, focus;
 
 /* =====================================================================
    BASE — plain elements, deliberately easy to override
@@ -338,6 +349,17 @@
 
   /* Notes that only take up room when they have something to say. */
   .when-needed:empty { display: none; }
+}
+
+/* =====================================================================
+   HIDDEN — above components, so nothing above can argue with it
+
+   One rule, and it is rule 4 at the top of this file. A page says
+   `thing.hidden = true` and the thing goes, whatever else is written
+   here about how that kind of element is laid out.
+   ===================================================================== */
+@layer hidden {
+  [hidden] { display: none; }
 }
 
 /* =====================================================================

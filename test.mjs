@@ -28,7 +28,7 @@ const workerSource = readFileSync(new URL("worker.js", import.meta.url), "utf8")
 // it hands its functions out to Node as well — so these tests run the
 // very code the tool runs, not a copy of it.
 const require = createRequire(import.meta.url);
-const { trailsToFile, ZONE_FIELDS, isUsableNumber, trailId,
+const { trailsToFile, ZONE_FIELDS, QUESTION_SETS, isUsableNumber, trailId,
         zoneProblems, trailProblems, readPosition,
         soundFileName, ZONE_FAULTS } = require("./trail-file.js");
 
@@ -822,6 +822,48 @@ for (const [name, original, expected] of [
 }
 check("the file type is kept, not the name the phone chose",
   soundFileName("Jimmy", "New Recording 3.m4a").endsWith(".m4a"));
+
+// =====================================================================
+section("Every question writes to a setting that exists");
+//
+// The fault this is here for: the "How big is this zone?" question
+// wrote to `size`, and a zone's setting is called `radius`. So the
+// answer landed on a name nothing reads, was dropped on the way to the
+// file, and the tool said "Saved" over a value it had not changed.
+//
+// Nothing complained, because the two lists were never compared. They
+// are now.
+// =====================================================================
+const questions = Object.keys(QUESTION_SETS);
+const settingsWritten = questions.reduce(function (all, question) {
+  return all.concat(QUESTION_SETS[question]);
+}, []);
+
+questions.forEach(function (question) {
+  QUESTION_SETS[question].forEach(function (setting) {
+    check('"' + question + '" writes ' + setting + ', which is a real setting',
+      ZONE_FIELDS.indexOf(setting) !== -1, setting);
+  });
+});
+
+// The other way round, or a setting could quietly become unreachable —
+// there with a default nobody can ever change.
+ZONE_FIELDS.forEach(function (setting) {
+  check(setting + " can be set by some question",
+    settingsWritten.indexOf(setting) !== -1);
+});
+
+check("no two questions fight over the same setting",
+  new Set(settingsWritten).size === settingsWritten.length);
+
+// The four a zone cannot be saved without must all be askable, or a
+// curator meets a fault they have no way to clear.
+const mustHave = {};
+zoneProblems({}).forEach(function (problem) { mustHave[problem.field] = true; });
+Object.keys(mustHave).forEach(function (question) {
+  check('"' + question + '" is refused when missing, so it must be askable',
+    QUESTION_SETS[question] !== undefined);
+});
 
 // =====================================================================
 console.log("\n" + (failures === 0
