@@ -96,6 +96,13 @@ const trails = {
         "audio": "assets/audio/edgar-interview.mp3",
         "loop": true,
         "exit": "finish"
+      },
+      {
+        "name": "West St",
+        "lat": 51.214445,
+        "lon": 0.800576,
+        "radius": 30,
+        "audio": "assets/audio/flute-1-jam-01.mp3"
       }
     ]
   }
