@@ -5,16 +5,36 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Mixtape</title>
 
-  <!-- Which walk is this? The rule lives further down, where the trail
-       file has arrived and the answer can be checked properly. This is
-       the same rule, run early for the common case: somebody who opened
-       the plain address named no walk at all, and nothing on this page
-       can be right until they pick one. Sending them now saves them
-       waiting on the map library below, which is fetched from another
-       website and is the slowest thing here. -->
+  <!-- The trail file, read before anything else. It is small and sits
+       next to this page, so it costs almost nothing here — and reading
+       it first is what lets the question below be settled before a
+       walker is shown anything at all. It has to load before the
+       engine at the foot of the page either way. -->
+  <script src="trail.js"></script>
+
+  <!-- Which walk is this? The name comes from the web address, so one
+       link can point straight at one walk.
+       If the address names no walk, or names one this file does not
+       have — renamed, or taken down since the link was shared — we
+       cannot know which was meant. trail.js falls back to whichever
+       walk is first in the file, which would quietly start the wrong
+       one with nothing on screen to say so. Hand over the list
+       instead.
+       Above the map library on purpose: that is fetched from another
+       website and is the slowest thing on this page, and somebody who
+       typed the plain address should not wait for it only to be sent
+       somewhere else.
+       Nothing further is needed to stop the engine below. It builds
+       itself but does nothing until the Start button is tapped, and
+       this page is on its way out before anyone could.
+       Guarded on `trails` so a hand-written file holding a single
+       `trail` and no list still works exactly as it always did. -->
   <script>
-    if (!new URLSearchParams(location.search).get("trail")) {
-      location.replace("walks.html");
+    const askedFor = new URLSearchParams(location.search).get("trail");
+    if (typeof trails !== "undefined" && trails &&
+        (!askedFor || !trails[askedFor])) {
+      location.replace("walks.html" +
+        (askedFor ? "?missing=" + encodeURIComponent(askedFor) : ""));
     }
   </script>
 
@@ -27,7 +47,11 @@
 </head>
 <body>
 
-  <h1>Logging</h1>
+  <!-- The walk's name goes here as soon as the trail file has been
+       read. "Mixtape" is what stands here until then, and what stays
+       if the file cannot be read at all — a heading that is briefly
+       empty reads as a page that has failed. -->
+  <h1 id="title">Mixtape</h1>
   <p>Page published – <span id="published">—</span></p>
 
   <!-- Safari only shares location after a real tap, and audio will need
@@ -59,10 +83,9 @@
   <h2>Log</h2>
   <ul id="log"></ul>
 
-  <!-- The trail definition — a separate file so curators only ever
-       need to touch that one. It must load before the engine below,
-       and scripts run in page order, so it comes first. -->
-  <script src="trail.js"></script>
+  <!-- The trail definition is loaded in the head, above the map
+       library — it has to be read before this page can know which walk
+       it is showing, and that question is settled there. -->
 
   <script>
     // Two bits of memory, so the page can report frequency:
@@ -96,27 +119,20 @@
         "trail.js failed to load — check the file for typos");
     }
 
-    // Which walk this is. The name comes from the web address, so one
-    // link can point straight at one walk.
+    // Say which walk this is, in the heading and in the browser tab.
     //
-    // If the address names no walk, or names one the file does not
-    // have — renamed, or taken down since the link was shared — we
-    // cannot know which was meant. trail.js falls back to whichever is
-    // first in the file, which would quietly start the wrong walk with
-    // nothing on screen to say so. Hand over the list instead.
+    // Somebody who just picked it off the list arrives expecting to see
+    // it. And a walker who got here by an old link has, until now, had
+    // nothing on the page to tell them they are on the wrong walk —
+    // the heading said "Logging", left over from when this page was
+    // only a diagnostic.
     //
-    // Guarded on `trails` so a hand-written file holding a single
-    // `trail` and no list still works exactly as it always did.
-    const askedFor = new URLSearchParams(location.search).get("trail");
-    if (typeof trails !== "undefined" && trails &&
-        (!askedFor || !trails[askedFor])) {
-      location.replace("walks.html" +
-        (askedFor ? "?missing=" + encodeURIComponent(askedFor) : ""));
-      // replace() does not stop this script. Without throwing, the
-      // engine below would spend its last moment setting up the wrong
-      // walk — and it is the part that starts audio.
-      throw new Error("that walk is not here — choosing another");
-    }
+    // Falls back to the short name from the address, then to the
+    // product name, so a hand-written trail file with no name still
+    // gets a heading rather than a blank.
+    const walkName = trail.name || askedFor || "Mixtape";
+    document.getElementById("title").textContent = walkName;
+    document.title = walkName + " — Mixtape";
 
     // A trail with no zones is not a trail. The map cannot frame
     // itself around nothing and the engine has nothing to measure
