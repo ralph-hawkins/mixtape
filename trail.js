@@ -84,7 +84,7 @@ const trails = {
         "name": "South St",
         "lat": 51.21507,
         "lon": -0.796782,
-        "radius": 60,
+        "radius": 30,
         "audio": "assets/audio/golden-synth-drone.mp3",
         "exit": "finish"
       },
@@ -108,7 +108,7 @@ const trails = {
         "name": "Arndell Place",
         "lat": 51.213981,
         "lon": -0.80231,
-        "radius": 30,
+        "radius": 90,
         "audio": "assets/audio/juanita-finds-mittelholzer-01.mp3"
       },
       {
