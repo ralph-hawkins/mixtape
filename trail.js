@@ -106,8 +106,8 @@ const trails = {
       },
       {
         "name": "Arndell Place",
-        "lat": 51.213964,
-        "lon": -0.802343,
+        "lat": 51.213981,
+        "lon": -0.80231,
         "radius": 30,
         "audio": "assets/audio/juanita-finds-mittelholzer-01.mp3"
       },
@@ -119,9 +119,9 @@ const trails = {
         "audio": "assets/audio/set-up-of-haunted-flute-01.mp3"
       },
       {
-        "name": "Gardens",
-        "lat": 51.212812,
-        "lon": -0.802726,
+        "name": "Library gardens",
+        "lat": 51.212783,
+        "lon": -0.802734,
         "radius": 30,
         "audio": "assets/audio/flute-3-jam-01.mp3"
       }
