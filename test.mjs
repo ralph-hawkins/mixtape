@@ -59,27 +59,40 @@ function check(label, passed, detail) {
 // ---------------------------------------------------------------------
 // A pretend GitHub. `already` lists the paths it should claim exist;
 // every write it is asked to make is recorded in `writes`.
+//
+// It keeps a version number per file and CHANGES IT on every write,
+// exactly as GitHub does. That matters: a fake that always reports the
+// same version can only ever model one save, and the fault this was
+// built to catch needs two in a row.
 // ---------------------------------------------------------------------
 let writes = [];
+let versions = new Map();
 function pretendGitHub(already = []) {
-  const there = new Set(already);
+  versions = new Map();
+  already.forEach(function (path) { versions.set(path, "version-of-" + path); });
   writes = [];
+  let made = 0;
   globalThis.fetch = async function (url, options = {}) {
     const path = decodeURIComponent(
       String(url).split("/contents/")[1].split("?")[0]);
     if ((options.method || "GET") === "GET") {
-      return new Response(JSON.stringify({ sha: "version-of-" + path }),
-        { status: there.has(path) ? 200 : 404 });
+      return new Response(JSON.stringify({ sha: versions.get(path) }),
+        { status: versions.has(path) ? 200 : 404 });
     }
     const sent = JSON.parse(options.body);
     writes.push({ path, sent });
     // The real GitHub refuses a write that claims to replace a version
     // that is no longer the current one.
-    if (sent.sha && sent.sha !== "version-of-" + path) {
+    if (sent.sha && sent.sha !== versions.get(path)) {
       return new Response(JSON.stringify({ message: "sha did not match" }),
         { status: 409 });
     }
-    return new Response("{}", { status: sent.sha ? 200 : 201 });
+    // A write makes a new version, and GitHub says which in its reply.
+    made = made + 1;
+    const now = "version-" + made + "-of-" + path;
+    versions.set(path, now);
+    return new Response(JSON.stringify({ content: { sha: now } }),
+      { status: sent.sha ? 200 : 201 });
   };
 }
 
@@ -278,6 +291,13 @@ r = await send(trailSave({ baseSha: "version-of-trail.js" }));
 check("saving from the current version works", r.status === 200);
 check("it sends the page's version, not one it looked up itself",
   writes[0].sent.sha === "version-of-trail.js");
+// The page has to know which version its save created, or its NEXT
+// save claims one that no longer exists and is refused. GitHub says so
+// in its reply to the write, so there is nothing to go and ask.
+check("it hands back the version the save just created",
+  r.body.sha === versions.get("trail.js"), r.body.sha);
+check("and that is not the version it replaced",
+  r.body.sha && r.body.sha !== "version-of-trail.js", r.body.sha);
 
 pretendGitHub(["trail.js"]);
 r = await send(trailSave({ baseSha: "an-older-version" }));
@@ -513,6 +533,166 @@ section("Knowing whether there is anything to save");
     loadCurate("localhost").includes("localNotice"));
   check("and the same from the numeric address",
     loadCurate("127.0.0.1").includes("localNotice"));
+}
+
+// =====================================================================
+section("Saving twice in a row");
+// The fault this was written for: after a save, the tool went and
+// asked GitHub which version the file was now. That question can fail
+// — it is swallowed silently — and when it did, the browser was left
+// holding the version from BEFORE the save, with nothing marked
+// unsaved. Nothing looked wrong. The next save was then refused as a
+// clash with another curator who did not exist, and the only way out
+// offered was to throw the work away.
+//
+// The service now hands back the version its write created, because
+// GitHub told it outright. The rule underneath: never hold a version
+// we cannot vouch for.
+// =====================================================================
+{
+  const shelf = () => {
+    const kept = new Map();
+    return { getItem: (k) => kept.has(k) ? kept.get(k) : null,
+             setItem: (k, v) => kept.set(k, String(v)),
+             removeItem: (k) => kept.delete(k) };
+  };
+  // Just enough of an element for the unsaved-work strip to be built
+  // against, the same as the block above.
+  const nothing = () => ({ id: "", className: "", textContent: "",
+    href: "", firstChild: null, appendChild() {}, remove() {},
+    setAttribute() {}, insertBefore() {}, addEventListener() {} });
+  globalThis.localStorage = shelf();
+  globalThis.window = { addEventListener() {},
+    localStorage: globalThis.localStorage };
+  globalThis.document = { getElementById: () => null,
+    querySelector: () => null,
+    createElement: nothing, body: nothing() };
+  globalThis.location = { hostname: "ralph-hawkins.github.io",
+    search: "", pathname: "/mixtape/trail.html", href: "" };
+
+  const curateSource = readFileSync(new URL("curate.js", import.meta.url), "utf8");
+  const Curate = new Function("trailsToFile", "trailProblems", "trailId",
+    curateSource + "; return Curate;")(trailsToFile, trailProblems, trailId);
+  Curate.signIn("Jamie", "correct horse");
+
+  // The tool and the save service wired together: curate.js's fetch
+  // reaches worker.fetch, and the Worker's own fetch reaches the
+  // pretend GitHub. A save is exercised the whole way down, which is
+  // the only way this fault shows up — each half on its own is fine.
+  pretendGitHub(["trail.js"]);
+  const github = globalThis.fetch;
+  const wire = (saveService) => {
+    globalThis.fetch = async function (url, options = {}) {
+      if (String(url).indexOf("api.github.com") !== -1) {
+        return github(url, options);
+      }
+      return saveService(url, options);
+    };
+  };
+  const realService = (url, options) => worker.fetch(
+    new Request(String(url), options), env);
+
+  const zone = { name: "West", lat: 51.4, lon: 0.01, radius: 40,
+    audio: "assets/audio/a.m4a" };
+  // Back to the beginning: a curator who has just opened the tool, and
+  // a repository holding the version they were given. Both, or the
+  // copy starts out stale and every check below is measuring the wrong
+  // thing.
+  const start = () => {
+    versions.set("trail.js", "version-of-trail.js");
+    const loaded = { park: { name: "The Park", zones: [zone] } };
+    localStorage.setItem("mixtape-working-copy-4", JSON.stringify(
+      { baseSha: "version-of-trail.js",
+        trails: JSON.parse(JSON.stringify(loaded)),
+        original: JSON.parse(JSON.stringify(loaded)) }));
+  };
+  const save = () => new Promise((done) => Curate.save(done));
+
+  wire(realService);
+  start();
+
+  Curate.update((t) => { t.park.name = "Renamed once"; });
+  let saved = await save();
+  check("the first save goes in", saved.saved === true, saved.error);
+  check("the copy moves on to the version that save created",
+    Curate.working().baseSha === versions.get("trail.js"),
+    Curate.working().baseSha);
+  check("and there is nothing left to save", !Curate.changed());
+
+  Curate.update((t) => { t.park.name = "Renamed twice"; });
+  saved = await save();
+  check("a second save, without reloading, goes in too",
+    saved.saved === true, saved.error);
+  check("nobody is blamed for a clash that did not happen",
+    !saved.conflict);
+  check("and the copy moves on again",
+    Curate.working().baseSha === versions.get("trail.js"),
+    Curate.working().baseSha);
+
+  // The one that bites.
+  //
+  // Everything above passes with the old code too, because a pretend
+  // GitHub always answers. The fault only appears when the version
+  // check FAILS — and the check the tool makes is anonymous, which is
+  // exactly the one GitHub rate limits: 60 an hour for every curator
+  // sharing an address. The Worker's own calls carry a key and are
+  // unaffected, so saving works while asking does not.
+  //
+  // Old behaviour here: the first save leaves the version from before
+  // it, nothing looks wrong, and the second save is refused as a clash
+  // with a curator who does not exist.
+  start();
+  wire(realService);
+  const anonymous = globalThis.fetch;
+  globalThis.fetch = async function (url, options = {}) {
+    const asking = new Headers((options || {}).headers || {});
+    if (String(url).indexOf("api.github.com") !== -1 &&
+        !asking.get("Authorization")) {
+      return new Response("rate limited", { status: 403 });
+    }
+    return anonymous(url, options);
+  };
+
+  Curate.update((t) => { t.park.name = "Once"; });
+  saved = await save();
+  check("with the version check rate limited, the save still goes in",
+    saved.saved === true, saved.error);
+  Curate.update((t) => { t.park.name = "Twice"; });
+  saved = await save();
+  check("and the save after it is not refused as somebody else's work",
+    saved.saved === true && !saved.conflict, saved.error);
+
+  // An older save service, still deployed, that does not say which
+  // version it wrote. The tool falls back to asking — what it used to
+  // do every time — so a page that goes live ahead of the service is
+  // no worse off than it was.
+  start();
+  wire(async () => new Response(JSON.stringify({ ok: true, path: "trail.js" }),
+    { status: 200 }));
+  Curate.update((t) => { t.park.name = "Older service"; });
+  await save();
+  check("with a service too old to say, it falls back to asking",
+    Curate.working().baseSha === versions.get("trail.js"),
+    Curate.working().baseSha);
+
+  // And when neither can say — an old service AND GitHub refusing to
+  // answer — the copy is left holding no version at all rather than a
+  // stale one. `start` throws a copy like that away and fetches the
+  // trail again, which is the safe end: it has just been saved, so it
+  // holds nothing the file does not.
+  start();
+  globalThis.fetch = async function (url, options = {}) {
+    if (String(url).indexOf("api.github.com") !== -1) {
+      return new Response("rate limited", { status: 403 });
+    }
+    return new Response(JSON.stringify({ ok: true, path: "trail.js" }),
+      { status: 200 });
+  };
+  Curate.update((t) => { t.park.name = "Nobody can say"; });
+  await save();
+  check("a version it cannot vouch for is erased, not left looking current",
+    !Curate.working().baseSha,
+    JSON.stringify(Curate.working().baseSha));
 }
 
 // =====================================================================

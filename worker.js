@@ -308,10 +308,27 @@ async function putFile(path, base64, message, sha, extra, env, cors) {
   });
 
   if (put.status === 200 || put.status === 201) {
+    // Which version this write created. GitHub says so in its own
+    // reply, and that answer is free and certain — so send it back
+    // rather than leaving the page to go and ask, which is a second
+    // question with a different answer if anything happens in
+    // between. A page holding a version number that is out of date
+    // has its NEXT save refused, and the refusal blames a person who
+    // was never there.
+    //
+    // Read inside a try: a reply nobody can parse must not turn a
+    // save that really happened into a failure. The page is built to
+    // cope with this coming back empty.
+    let newVersion = "";
+    try {
+      newVersion = ((await put.json()).content || {}).sha || "";
+    } catch (error) { /* saved, but it did not say which version */ }
+
     return reply(200, Object.assign({
       ok: true,
       path: path,
       message: message,
+      sha: newVersion,
       // Carried back on a SUCCESSFUL save on purpose. A warning that
       // only appears once things break is not a warning.
       warning: keyExpiryWarning() || undefined

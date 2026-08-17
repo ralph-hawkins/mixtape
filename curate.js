@@ -140,6 +140,14 @@ const Curate = (function () {
 
     const copy = working();
 
+    // A copy that cannot say which version it came from can never be
+    // saved: the service refuses a save that does not say, because a
+    // save like that could bury somebody else's work. Keeping such a
+    // copy would trap whoever holds it — every save refused, and
+    // reloading handing back the same unsaveable copy. So it goes, and
+    // the trail is fetched again.
+    if (copy && !copy.baseSha) { discard(); loadFresh(ready, failed); return; }
+
     // Unsaved work is kept whatever the file says now. Saving will
     // notice if somebody else has been editing in the meantime.
     if (copy && changed()) { showUnsavedBanner(); ready(); return; }
@@ -236,6 +244,36 @@ const Curate = (function () {
   // -------------------------------------------------------------------
   // Saving
   // -------------------------------------------------------------------
+
+  // Put the working copy back in step after a save: it now holds
+  // exactly what the file holds, sitting on the version just written.
+  //
+  // The rule: never hold a version we cannot vouch for. One we cannot
+  // establish is erased rather than left sitting there looking
+  // current, and `start` throws such a copy away next time rather than
+  // letting it walk into a refusal. Erasing it is free here — this
+  // runs the moment a save succeeded, so the copy holds nothing that
+  // is not already in the file.
+  function settle(sha, done) {
+    function fix(version) {
+      const held = working();
+      if (held) {
+        held.baseSha = version || "";
+        // What was just saved is now what the file says, so there is
+        // nothing left to save until something else changes.
+        held.original = JSON.parse(JSON.stringify(held.trails));
+        putWorking(held);
+      }
+      done();
+    }
+    if (sha) { fix(sha); return; }
+    // No version in the reply, which means an older save service is
+    // still deployed. Fall back to asking — what the tool used to do
+    // every time — so a page that goes live ahead of the service is no
+    // worse off than it was.
+    currentVersion(fix);
+  }
+
   function save(onDone) {
     const copy = working();
     if (!copy) { onDone({ error: "There is nothing to save." }); return; }
@@ -266,20 +304,18 @@ const Curate = (function () {
           onDone({ error: answer.body.error, conflict: answer.status === 409 });
           return;
         }
-        // Saved, so this copy is now clean — and the version it is
-        // based on has moved on.
-        // The file has moved on, so remember which version it is now.
-        currentVersion(function (sha) {
-          const held = working();
-          if (held && sha) { held.baseSha = sha; putWorking(held); }
-          // What was just saved is now what the file says, so there is
-          // nothing left to save until something else changes.
-          const fresh = working();
-          if (fresh) {
-            // What was just saved is now what the file says.
-            fresh.original = JSON.parse(JSON.stringify(fresh.trails));
-            putWorking(fresh);
-          }
+        // Saved. The file has moved on, so this copy must move on with
+        // it, and the version it now sits on has to be right.
+        //
+        // The save service sends that version back, because GitHub
+        // told it outright which one the write created. Going and
+        // asking instead is a second question with its own answer, and
+        // if it comes back wrong — or does not come back — this
+        // browser is left holding a version that no longer exists.
+        // Nothing looks wrong at the time. The NEXT save is refused,
+        // and the refusal blames another curator who was never there,
+        // while the only way out it offers throws the work away.
+        settle(answer.body.sha, function () {
           showUnsavedBanner();
           onDone({ saved: true, warning: answer.body.warning });
         });
