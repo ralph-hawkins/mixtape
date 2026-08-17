@@ -82,8 +82,8 @@ const trails = {
     "zones": [
       {
         "name": "South St",
-        "lat": 51.215153,
-        "lon": 0.796845,
+        "lat": 51.21507,
+        "lon": -0.796782,
         "radius": 30,
         "audio": "assets/audio/golden-synth-drone.mp3",
         "exit": "finish"
