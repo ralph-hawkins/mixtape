@@ -90,8 +90,8 @@ const trails = {
       },
       {
         "name": "The Borough",
-        "lat": 51.215257,
-        "lon": 0.798303,
+        "lat": 51.21526,
+        "lon": -0.79844,
         "radius": 40,
         "audio": "assets/audio/edgar-interview.mp3",
         "loop": true,
