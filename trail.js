@@ -84,8 +84,9 @@ const trails = {
         "name": "South St",
         "lat": 51.21507,
         "lon": -0.796782,
-        "radius": 60,
+        "radius": 30,
         "audio": "assets/audio/golden-synth-drone.mp3",
+        "loop": true,
         "exit": "finish"
       },
       {
