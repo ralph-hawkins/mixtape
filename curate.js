@@ -155,74 +155,134 @@ const Curate = (function () {
     // A copy with nothing unsaved in it has nothing worth keeping, and
     // it now outlives the tab — so check it is still the current trail
     // rather than showing one somebody else has since changed.
+    //
+    // If the file cannot be reached, keep the copy and carry on. It is
+    // no worse than it was a moment ago, the curator can still work,
+    // and saving is the thing that finds out whether it is still
+    // current — the save service refuses a stale one outright.
     if (copy) {
-      currentVersion(function (sha) {
+      fetchTrail(function (text, sha) {
         if (sha && sha === copy.baseSha) { ready(); return; }
         discard();
-        loadFresh(ready, failed);
-      });
+        adopt(text, sha, ready, failed);
+      }, function () { ready(); });
       return;
     }
 
     loadFresh(ready, failed);
   }
 
-  // Which version of trail.js the repository is holding. Public, so
-  // this needs no password.
-  function currentVersion(ready) {
-    fetch("https://api.github.com/repos/" + REPO + "/contents/trail.js" +
+  // Which version of trail.js we are holding.
+  //
+  // Git names a file after the SHA-1 of its contents, with a short
+  // header in front. So the version is not something to be asked for —
+  // it can be worked out from the file itself, here, for nothing.
+  //
+  // It used to be a question put to GitHub, and GitHub rations
+  // anonymous questions: 60 an hour, shared by everyone on the same
+  // connection. This tool asked one on every page load, and adding a
+  // single zone is seven or eight pages. An afternoon of curating ran
+  // the allowance out, and the tool then stopped with "Could not check
+  // the trail version" — no reason anyone could act on, and no hint
+  // that waiting an hour would fix it.
+  //
+  // Working it out here closes a hole as well. The version came from
+  // GitHub, which is current the instant a save lands, while the trail
+  // itself is read from the published site, which runs a minute or two
+  // behind. In that gap a second curator was handed OLD contents
+  // wearing a NEW version number — and their next save would write the
+  // old trail over the new one, with nothing refused and nobody told.
+  // A version worked out from the contents in hand cannot describe
+  // anything else.
+  function versionOf(text) {
+    const encoder = new TextEncoder();
+    const content = encoder.encode(text);
+    // The header git puts in front before hashing. This has to match
+    // byte for byte, or every save would be refused as somebody else's
+    // work.
+    const header = encoder.encode("blob " + content.length + "\0");
+    const whole = new Uint8Array(header.length + content.length);
+    whole.set(header, 0);
+    whole.set(content, header.length);
+    return crypto.subtle.digest("SHA-1", whole).then(function (hash) {
+      return Array.from(new Uint8Array(hash)).map(function (byte) {
+        return byte.toString(16).padStart(2, "0");
+      }).join("");
+    });
+  }
+
+  // Web Crypto only exists in a secure context — https, or localhost.
+  // Served any other way (a phone reading a laptop's copy over wi-fi)
+  // it is missing, so fall back to asking, which is what this always
+  // used to do. Rationed, but better than a tool nobody can save from.
+  function versionOfFile(text) {
+    const subtle = (typeof crypto !== "undefined") && crypto.subtle;
+    if (subtle && subtle.digest) {
+      return versionOf(text).catch(askGitHubVersion);
+    }
+    return askGitHubVersion();
+  }
+
+  // The old way. Public, so it needs no password — and rationed
+  // because of it.
+  function askGitHubVersion() {
+    return fetch("https://api.github.com/repos/" + REPO + "/contents/trail.js" +
         "?ref=main", { cache: "no-store" })
       .then(function (response) { return response.ok ? response.json() : null; })
-      .then(function (info) { ready(info ? info.sha : null); })
-      .catch(function () { ready(null); });
+      .then(function (info) { return info ? info.sha : null; })
+      .catch(function () { return null; });
+  }
+
+  // Fetch trail.js and work out which version it is — the two things
+  // every page needs before it can show anything, and now one journey
+  // rather than two.
+  function fetchTrail(ok, failed) {
+    fetch("trail.js?t=" + Date.now(), { cache: "no-store" })
+      .then(function (response) {
+        if (!response.ok) { throw new Error("trail.js " + response.status); }
+        return response.text();
+      })
+      .then(function (text) {
+        return versionOfFile(text).then(function (sha) { return [text, sha]; });
+      })
+      // Two handlers rather than a catch on the end, so that a fault in
+      // whatever `ok` goes on to draw is not reported as "you are
+      // offline".
+      .then(function (both) { ok(both[0], both[1]); },
+            function () {
+              failed("Could not load the trail. Check you are online, " +
+                "then reload this page.");
+            });
+  }
+
+  // Take the file on as the working copy.
+  //
+  // The very text that was hashed is what gets run, as a script, the
+  // same way the walker's page runs it — so the tool can never
+  // disagree with the engine about what the file means, and the
+  // version can never be describing different contents from the ones
+  // in hand.
+  function adopt(text, sha, ready, failed) {
+    const script = document.createElement("script");
+    script.textContent = text;
+    document.head.appendChild(script);
+    if (typeof trails === "undefined") {
+      failed("The trail file could not be read. It may have a typo in it.");
+      return;
+    }
+    // `trails` here is the global the file declares. Copied, so editing
+    // the working copy never touches what was loaded.
+    const loaded = JSON.parse(JSON.stringify(trails));
+    // Keep the trail exactly as it arrived, to compare against and to
+    // put back if somebody changes their mind.
+    putWorking({ baseSha: sha || "", trails: loaded,
+      original: JSON.parse(JSON.stringify(loaded)) });
+    ready();
   }
 
   function loadFresh(ready, failed) {
-    let loadedTrails = null;
-    let sha = null;
-    let waiting = 2;
-    let broken = false;
-
-    function done() {
-      waiting = waiting - 1;
-      if (waiting > 0 || broken) { return; }
-      // Keep the trail exactly as it arrived, to compare against and
-      // to put back if somebody changes their mind.
-      putWorking({ baseSha: sha, trails: loadedTrails,
-        original: JSON.parse(JSON.stringify(loadedTrails)) });
-      ready();
-    }
-    function giveUp(message) {
-      if (broken) { return; }
-      broken = true;
-      (failed || function () {})(message);
-    }
-
-    // Loaded exactly as the walker's page loads it, so the tool can
-    // never disagree with the engine about what the file means.
-    const script = document.createElement("script");
-    script.src = "trail.js?t=" + Date.now();
-    script.onload = function () {
-      if (typeof trails === "undefined") {
-        giveUp("The trail file has nothing in it.");
-        return;
-      }
-      // `trails` here is the global from trail.js. Copied, so editing
-      // the working copy never touches what was loaded.
-      loadedTrails = JSON.parse(JSON.stringify(trails));
-      done();
-    };
-    script.onerror = function () {
-      giveUp("Could not load the trail. Check you are online, then " +
-        "reload this page.");
-    };
-    document.head.appendChild(script);
-
-    currentVersion(function (found) {
-      if (!found) { giveUp("Could not check the trail version."); return; }
-      sha = found;
-      done();
-    });
+    fetchTrail(function (text, sha) { adopt(text, sha, ready, failed); },
+      failed);
   }
 
   // -------------------------------------------------------------------
@@ -254,7 +314,7 @@ const Curate = (function () {
   // letting it walk into a refusal. Erasing it is free here — this
   // runs the moment a save succeeded, so the copy holds nothing that
   // is not already in the file.
-  function settle(sha, done) {
+  function settle(sha, sent, done) {
     function fix(version) {
       const held = working();
       if (held) {
@@ -268,10 +328,11 @@ const Curate = (function () {
     }
     if (sha) { fix(sha); return; }
     // No version in the reply, which means an older save service is
-    // still deployed. Fall back to asking — what the tool used to do
-    // every time — so a page that goes live ahead of the service is no
-    // worse off than it was.
-    currentVersion(fix);
+    // still deployed. We can still vouch for one without asking
+    // anybody: the write succeeded, so the file now holds exactly the
+    // text we sent, and a version is only ever the name of some
+    // contents.
+    versionOfFile(sent).then(fix, function () { fix(""); });
   }
 
   function save(onDone) {
@@ -284,12 +345,16 @@ const Curate = (function () {
     const problems = savingProblems(copy.trails);
     if (problems.length > 0) { onDone({ problems: problems }); return; }
 
+    // Held on to, not just sent: if the save service is too old to say
+    // which version it wrote, this text is the answer.
+    const sending = trailsToFile(copy.trails);
+
     fetch(SAVE_SERVICE + "/trail", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         password: password(), who: who(),
-        content: trailsToFile(copy.trails),
+        content: sending,
         baseSha: copy.baseSha
       })
     })
@@ -318,7 +383,7 @@ const Curate = (function () {
         // Nothing looks wrong at the time. The NEXT save is refused,
         // and the refusal blames another curator who was never there,
         // while the only way out it offers throws the work away.
-        settle(answer.body.sha, function () {
+        settle(answer.body.sha, sending, function () {
           showUnsavedBanner();
           onDone({ saved: true, warning: answer.body.warning });
         });
@@ -481,5 +546,6 @@ const Curate = (function () {
   return { who, password, signIn, signedIn, needsSignIn,
            start, trails: allTrails, update, changed, whatChanged, revert,
            discard, working, sounds, save, ask, go, showProblems,
+           version: versionOfFile,
            offerDiscard, showUnsavedBanner };
 })();

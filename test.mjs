@@ -67,6 +67,24 @@ function check(label, passed, detail) {
 // ---------------------------------------------------------------------
 let writes = [];
 let versions = new Map();
+// What git would call a file holding these bytes.
+async function blobName(bytes) {
+  const header = new TextEncoder().encode("blob " + bytes.length + "\0");
+  const whole = new Uint8Array(header.length + bytes.length);
+  whole.set(header, 0);
+  whole.set(bytes, header.length);
+  const hash = await crypto.subtle.digest("SHA-1", whole);
+  return Array.from(new Uint8Array(hash))
+    .map((byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function fromBase64(base64) {
+  const binary = atob(String(base64 || ""));
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) { bytes[i] = binary.charCodeAt(i); }
+  return bytes;
+}
+
 function pretendGitHub(already = []) {
   versions = new Map();
   already.forEach(function (path) { versions.set(path, "version-of-" + path); });
@@ -88,8 +106,15 @@ function pretendGitHub(already = []) {
         { status: 409 });
     }
     // A write makes a new version, and GitHub says which in its reply.
+    //
+    // Named the way git really names a file — the SHA-1 of its
+    // contents behind a short header — rather than with a made-up
+    // string. The tool now works that name out for itself instead of
+    // asking, and a fake that invents names could never show whether
+    // the two agree. They have to, exactly: a version the tool gets
+    // wrong means every following save refused as somebody else's work.
     made = made + 1;
-    const now = "version-" + made + "-of-" + path;
+    const now = await blobName(fromBase64(sent.content));
     versions.set(path, now);
     return new Response(JSON.stringify({ content: { sha: now } }),
       { status: sent.sha ? 200 : 201 });
@@ -662,25 +687,66 @@ section("Saving twice in a row");
   check("and the save after it is not refused as somebody else's work",
     saved.saved === true && !saved.conflict, saved.error);
 
+  // The version the tool works out has to be the one git would give.
+  // Not nearly, exactly — it is sent back as "the version I am
+  // replacing", and a wrong one means every save refused as a clash
+  // with a curator who was never there. Held here against an answer
+  // from git itself: `printf 'hello\n' | git hash-object --stdin`.
+  check("a version is worked out the way git names a file",
+    await Curate.version("hello\n") ===
+      "ce013625030ba8dba906f756967f9e9ca394464a",
+    await Curate.version("hello\n"));
+
   // An older save service, still deployed, that does not say which
-  // version it wrote. The tool falls back to asking — what it used to
-  // do every time — so a page that goes live ahead of the service is
-  // no worse off than it was.
+  // version it wrote. The tool can still vouch for one without asking
+  // anybody: the write went in, so the file now holds exactly the text
+  // it sent, and a version is only ever the name of some contents.
+  //
+  // This is the check that the name it works out and the name GitHub
+  // gives are the same name. The write here is real — it goes all the
+  // way down to the pretend GitHub, which names files the way git
+  // does — and only the version is stripped out of the answer on its
+  // way back.
   start();
-  wire(async () => new Response(JSON.stringify({ ok: true, path: "trail.js" }),
-    { status: 200 }));
+  wire(async (url, options) => {
+    const answer = await realService(url, options);
+    if (!answer.ok) { return answer; }
+    const body = await answer.json();
+    delete body.sha;
+    return new Response(JSON.stringify(body), { status: answer.status });
+  });
+  // Count what it asks GitHub without a key. That is the rationed
+  // question — 60 an hour for everyone sharing a connection — and not
+  // spending it is the whole point of working the version out. Getting
+  // the right answer by going and asking would pass the check below
+  // and still leave a curator stranded halfway through an afternoon.
+  const wired = globalThis.fetch;
+  let asked = 0;
+  globalThis.fetch = async function (url, options = {}) {
+    const asking = new Headers((options || {}).headers || {});
+    if (String(url).indexOf("api.github.com") !== -1 &&
+        !asking.get("Authorization")) { asked = asked + 1; }
+    return wired(url, options);
+  };
   Curate.update((t) => { t.park.name = "Older service"; });
   await save();
-  check("with a service too old to say, it falls back to asking",
+  check("with a service too old to say, it works the version out itself",
     Curate.working().baseSha === versions.get("trail.js"),
-    Curate.working().baseSha);
+    Curate.working().baseSha + " — GitHub says " + versions.get("trail.js"));
+  check("and spends no rationed question on GitHub doing it",
+    asked === 0, asked + " asked");
 
-  // And when neither can say — an old service AND GitHub refusing to
-  // answer — the copy is left holding no version at all rather than a
-  // stale one. `start` throws a copy like that away and fetches the
-  // trail again, which is the safe end: it has just been saved, so it
-  // holds nothing the file does not.
+  // And when nobody can say — an old service, GitHub refusing to
+  // answer, and no Web Crypto to work it out with, which is a page
+  // served over plain http rather than https — the copy is left
+  // holding no version at all rather than a stale one. `start` throws
+  // a copy like that away and fetches the trail again, which is the
+  // safe end: it has just been saved, so it holds nothing the file
+  // does not.
   start();
+  const realCrypto = globalThis.crypto;
+  Object.defineProperty(globalThis, "crypto",
+    { value: {}, configurable: true, writable: true });
   globalThis.fetch = async function (url, options = {}) {
     if (String(url).indexOf("api.github.com") !== -1) {
       return new Response("rate limited", { status: 403 });
@@ -690,6 +756,8 @@ section("Saving twice in a row");
   };
   Curate.update((t) => { t.park.name = "Nobody can say"; });
   await save();
+  Object.defineProperty(globalThis, "crypto",
+    { value: realCrypto, configurable: true, writable: true });
   check("a version it cannot vouch for is erased, not left looking current",
     !Curate.working().baseSha,
     JSON.stringify(Curate.working().baseSha));
