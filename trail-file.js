@@ -102,6 +102,54 @@ function isUsableNumber(value) {
 //   https://www.google.com/maps/@51.46162,0.010941,17z
 //
 // Returns { lat, lon }, or null if it cannot be read.
+//
+// The rule throughout is that a position it cannot be SURE of is
+// refused. Anything else puts a zone somewhere real and nowhere near
+// the right place, which is the one failure nobody catches: it looks
+// like a perfectly good answer. Two things used to slip through.
+// "South St, Farnham GU9 7RN" came back as latitude 9, longitude 7,
+// because it took the first two numbers it could find anywhere in the
+// text. And an OpenStreetMap address had its ZOOM LEVEL read as a
+// latitude, for the same reason.
+
+// One half of a position: a number, optionally in degrees, minutes and
+// seconds, optionally with a compass letter after it. Minutes and
+// seconds only count when their marks are actually there — otherwise
+// "51.4616 0.0109" would read the longitude as minutes of latitude.
+const ONE_HALF = "(-?\\d+(?:\\.\\d+)?)\\s*°?\\s*" +
+                 "(?:(\\d+(?:\\.\\d+)?)\\s*'\\s*)?" +
+                 "(?:(\\d+(?:\\.\\d+)?)\\s*\"\\s*)?" +
+                 "\\s*([NSEW])?";
+
+// The two halves have to be properly separated — by punctuation, or by
+// a space. Letting them run together looks harmless and is not: with
+// nothing required between them, "51.46162" on its own matches as a
+// pair, because the regex simply backtracks and splits the number into
+// "51.4616" and "2". One number is not a position, and the test suite
+// caught exactly this.
+const BETWEEN = "(?:\\s*[,;/]\\s*|\\s+)";
+
+// A pair, and NOTHING ELSE. Anchored at both ends on purpose: that is
+// what tells a position apart from a sentence with numbers in it.
+const A_PAIR = new RegExp(
+  "^\\s*" + ONE_HALF + BETWEEN + ONE_HALF + "\\s*$", "i");
+
+// Degrees, minutes and seconds added up into one number.
+//
+// The minus sign is read off the TEXT, not the number. "-0" is a real
+// thing to write — every longitude between Greenwich and one degree
+// west of it starts that way, which is most of Surrey and Hampshire —
+// and JavaScript says -0 is not less than zero, so testing the number
+// silently dropped the sign. A zone in Farnham came out 110 km away in
+// Kent.
+function halfValue(degrees, minutes, seconds) {
+  const negative = /^-/.test(String(degrees));
+  const size = Math.abs(Number(degrees)) +
+               Number(minutes || 0) / 60 +
+               Number(seconds || 0) / 3600;
+  return negative ? -size : size;
+}
+
 function readPosition(text) {
   let s = String(text === undefined || text === null ? "" : text)
     // Phones and web pages love a curly quote. Flatten them all first,
@@ -125,41 +173,36 @@ function readPosition(text) {
   if (pinLat && pinLon) {
     return asPosition(Number(pinLat[1]), Number(pinLon[1]));
   }
+  // OpenStreetMap, which writes both a dropped pin and a map centre
+  // differently from everyone else. Its centre carries the zoom level
+  // in front, and that used to be read as the latitude.
+  const markLat = s.match(/[?&]mlat=(-?\d+(?:\.\d+)?)/);
+  const markLon = s.match(/[?&]mlon=(-?\d+(?:\.\d+)?)/);
+  if (markLat && markLon) {
+    return asPosition(Number(markLat[1]), Number(markLon[1]));
+  }
+  const osm = s.match(
+    /[#&]map=\d+(?:\.\d+)?\/(-?\d+(?:\.\d+)?)\/(-?\d+(?:\.\d+)?)/);
+  if (osm) {
+    return asPosition(Number(osm[1]), Number(osm[2]));
+  }
   const centred = s.match(/[@=](-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/);
   if (centred) {
     return asPosition(Number(centred[1]), Number(centred[2]));
   }
 
-  const found = [];
-  if (/[°'"]/.test(s)) {
-    // Degrees, minutes and seconds — in any of its half-finished
-    // forms, since minutes and seconds are both optional.
-    const parts = /(-?\d+(?:\.\d+)?)\s*°\s*(?:(\d+(?:\.\d+)?)\s*'\s*)?(?:(\d+(?:\.\d+)?)\s*"\s*)?\s*([NSEW])?/gi;
-    let piece;
-    while ((piece = parts.exec(s)) !== null) {
-      if (!piece[0].trim()) { break; }
-      const degrees = Number(piece[1]);
-      let value = Math.abs(degrees) + Number(piece[2] || 0) / 60 +
-                  Number(piece[3] || 0) / 3600;
-      if (degrees < 0) { value = -value; }
-      found.push({ value: value, side: (piece[4] || "").toUpperCase() });
-    }
-  } else {
-    // Plain numbers. Only treated as degrees, minutes and seconds when
-    // the symbols are actually there — otherwise "51.4616 0.0109"
-    // would read the longitude as minutes of latitude.
-    const parts = /(-?\d+(?:\.\d+)?)\s*([NSEW])?/gi;
-    let piece;
-    while ((piece = parts.exec(s)) !== null) {
-      if (!piece[0].trim()) { break; }
-      found.push({ value: Number(piece[1]),
-                   side: (piece[2] || "").toUpperCase() });
-    }
-  }
-  if (found.length < 2) { return null; }
+  // A link none of those recognised. Refused rather than rummaged
+  // through for numbers: a web address is full of them — zoom levels,
+  // sizes, identifiers — and any two of them make a place.
+  if (/:\/\/|www\./i.test(s)) { return null; }
 
-  let first = found[0];
-  let second = found[1];
+  const halves = A_PAIR.exec(s);
+  if (!halves) { return null; }
+
+  let first = { value: halfValue(halves[1], halves[2], halves[3]),
+                side: (halves[4] || "").toUpperCase() };
+  let second = { value: halfValue(halves[5], halves[6], halves[7]),
+                 side: (halves[8] || "").toUpperCase() };
   // Some places write longitude first. If the letters say so, believe
   // them rather than the order.
   if ((first.side === "E" || first.side === "W") &&
@@ -169,6 +212,36 @@ function readPosition(text) {
   const lat = (first.side === "S") ? -Math.abs(first.value) : first.value;
   const lon = (second.side === "W") ? -Math.abs(second.value) : second.value;
   return asPosition(lat, lon);
+}
+
+
+// What the two position boxes on the "where" question add up to.
+//
+// The first box takes a whole position however it is written — a pair,
+// degrees and minutes, a map link. The second takes a longitude on its
+// own. Reading them as one answer is what lets a curator paste into
+// the first, or type across both, without having to know which sort of
+// coordinate they are holding.
+//
+// The empty box is left out rather than joined with a comma. A
+// trailing comma is not a position, and now that half-written text is
+// refused rather than guessed at, joining one in would turn a
+// perfectly good answer into "enter where this zone is".
+//
+// This lives here, not in the page, because it is a decision and
+// getting it wrong is silent: it does not look like a fault, it looks
+// like a zone somewhere else.
+function readPositionBoxes(first, second) {
+  const boxes = [first, second].map(function (box) {
+    return String(box === undefined || box === null ? "" : box).trim();
+  });
+  const both = readPosition(boxes.filter(function (box) {
+    return box !== "";
+  }).join(", "));
+  // The two together, then the first on its own — so a whole position
+  // in the first box still reads correctly when the second is holding
+  // something left over.
+  return both || readPosition(boxes[0]);
 }
 
 // Only hand back a position that could exist on Earth. A misread
@@ -185,7 +258,10 @@ function asPosition(lat, lon) {
 }
 
 function toSixPlaces(n) {
-  return Math.round(n * 1e6) / 1e6;
+  const rounded = Math.round(n * 1e6) / 1e6;
+  // Minus zero is a real number in JavaScript and a nonsense in a trail
+  // file. Flattened here so nothing downstream has to know about it.
+  return rounded === 0 ? 0 : rounded;
 }
 
 // Turn a name into something safe to put in a web address.
@@ -304,5 +380,5 @@ function savingProblems(all) {
 if (typeof module !== "undefined" && module.exports) {
   module.exports = { ZONE_FIELDS, QUESTION_SETS, trailsToFile, zoneToPlain,
     isUsableNumber, trailId, zoneProblems, trailProblems, savingProblems,
-    readPosition, soundFileName, ZONE_FAULTS };
+    readPosition, readPositionBoxes, soundFileName, ZONE_FAULTS };
 }

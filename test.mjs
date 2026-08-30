@@ -30,7 +30,7 @@ const workerSource = readFileSync(new URL("worker.js", import.meta.url), "utf8")
 const require = createRequire(import.meta.url);
 const { trailsToFile, ZONE_FIELDS, QUESTION_SETS, isUsableNumber, trailId,
         zoneProblems, trailProblems, savingProblems, readPosition,
-        soundFileName, ZONE_FAULTS } = require("./trail-file.js");
+        readPositionBoxes, soundFileName, ZONE_FAULTS } = require("./trail-file.js");
 
 // Load worker.js as a module without renaming it or adding a
 // package.json, by handing its text straight to the importer.
@@ -750,6 +750,130 @@ section("Reading a position, however it is written");
     check("refuses " + label, readPosition(written) === null,
       JSON.stringify(readPosition(written)));
   }
+}
+
+// =====================================================================
+section("Reading a position west of Greenwich");
+// The tests above are all anchored on Priory Park, which is a few
+// hundred metres EAST of the Greenwich meridian. Every trail this
+// project is actually for is west of it: Farnham is -0.79, Aldershot
+// -0.76, and the whole of Surrey and Hampshire with them. So every
+// example here carries a minus, because that is the half that broke
+// and the half the suite could not see.
+// =====================================================================
+{
+  const near = (got, lat, lon) => !!got &&
+    Math.abs(got.lat - lat) < 0.001 && Math.abs(got.lon - lon) < 0.001;
+  const FARNHAM = [51.215153, -0.796845];
+
+  for (const [label, written] of [
+    ["a minus",                "51.215153, -0.796845"],
+    ["a minus, no comma",      "51.215153 -0.796845"],
+    ["a W instead of a minus", "51.215153 N, 0.796845 W"],
+    ["degrees, minutes and seconds west",
+      "51\u00b012\u203254.55\u2033N 0\u00b047\u203248.64\u2033W"],
+    // The one that put a zone 110 km out. A longitude between Greenwich
+    // and one degree west of it is written "-0 degrees, 47 minutes" —
+    // and JavaScript says -0 is not less than zero, so the minus was
+    // silently dropped and the zone appeared in Kent. The sign is read
+    // off the text now, not the number.
+    ["minus zero degrees, then minutes",
+      "51\u00b012\u203254.55\u2033 -0\u00b047\u203248.64\u2033"],
+    ["minus zero degrees and decimal minutes",
+      "51\u00b012.909\u2032 -0\u00b047.811\u2032"],
+    ["a decimal minus zero", "51.215153\u00b0 -0.796845\u00b0"],
+    ["a Google link",
+      "https://www.google.com/maps/@51.215153,-0.796845,17z"],
+    ["a Google link with a dropped pin",
+      "https://www.google.com/maps/place/South+St/@51.2,-0.79,17z/" +
+      "data=!3m1!4b1!4m6!3m5!8m2!3d51.215153!4d-0.796845"],
+    ["an Apple Maps link",
+      "https://maps.apple.com/?ll=51.215153,-0.796845&q=South%20St"],
+    ["an OpenStreetMap link",
+      "https://www.openstreetmap.org/#map=17/51.215153/-0.796845"],
+    ["an OpenStreetMap pin",
+      "https://www.openstreetmap.org/?mlat=51.215153&mlon=-0.796845#map=17/51.2/-0.8"]]) {
+    check(label, near(readPosition(written), FARNHAM[0], FARNHAM[1]),
+      JSON.stringify(readPosition(written)));
+  }
+
+  // Refusing is the right answer for anything it cannot be sure of, and
+  // these are the ones that used to come back looking perfectly good.
+  // An address became latitude 9, longitude 7 — a real place in the
+  // Gulf of Guinea — because the old reader took the first two numbers
+  // it could find anywhere in the text. An OpenStreetMap address had
+  // its zoom level read as a latitude the same way.
+  for (const [label, written] of [
+    ["an address with a postcode in it", "South St, Farnham GU9 7RN"],
+    ["a house number and a postcode", "12 West St, GU9 7DR"],
+    ["a link it does not recognise",
+      "https://what3words.com/index.stray.pinch"],
+    ["a shortened map link", "https://maps.app.goo.gl/aBc123XyZ"],
+    ["one number with a stray word", "51.215153 metres"],
+    ["a sentence", "about 30 m north of the bench, 2 doors up"],
+    ["one number on its own", "-0.796845"]]) {
+    check("refuses " + label, readPosition(written) === null,
+      JSON.stringify(readPosition(written)));
+  }
+}
+
+// =====================================================================
+section("The two position boxes, read as one answer");
+// The question shows two boxes. A curator may paste a whole position
+// into the first, or type one across both, and should not have to know
+// which they are doing.
+//
+// This used to be done by re-reading the first box on EVERY KEYSTROKE
+// and splitting it in two. That works for a paste and destroys
+// anything typed: half way through "51.215153, -0.796845" the box
+// holds "51.215153, -0" — a perfectly good pair — so both boxes were
+// rewritten under the caret and the rest of the digits went somewhere
+// nobody meant. Typing that position by hand saved a zone in Germany,
+// and the tool said "Saved".
+// =====================================================================
+{
+  const near = (got, lat, lon) => !!got &&
+    Math.abs(got.lat - lat) < 0.001 && Math.abs(got.lon - lon) < 0.001;
+
+  for (const [label, first, second] of [
+    ["a whole position in the first box", "51.215153, -0.796845", ""],
+    ["one in each box", "51.215153", "-0.796845"],
+    ["a link in the first box",
+      "https://www.google.com/maps/@51.215153,-0.796845,17z", ""],
+    ["degrees and minutes across the two",
+      "51\u00b012\u203254.55\u2033N", "0\u00b047\u203248.64\u2033W"],
+    ["a W in the second box, for a keyboard with no minus",
+      "51.215153", "0.796845 W"],
+    // The first box wins when it already holds the lot. Otherwise a
+    // leftover longitude from a previous answer would be joined on the
+    // end and the whole thing refused.
+    ["a whole position, with the second box left over",
+      "51.215153, -0.796845", "-0.796845"]]) {
+    check(label, near(readPositionBoxes(first, second), 51.215153, -0.796845),
+      JSON.stringify(readPositionBoxes(first, second)));
+  }
+
+  check("a latitude on its own is not a position",
+    readPositionBoxes("51.215153", "") === null);
+  check("two empty boxes are not a position",
+    readPositionBoxes("", "") === null);
+
+  // The fix itself, guarded where it lives. Splitting the boxes is only
+  // allowed once somebody has finished with one — on a paste, or on
+  // leaving it. Wired to "input" it runs per keystroke, and everything
+  // above stops meaning anything.
+  const page = readFileSync(new URL("zone-edit.html", import.meta.url), "utf8");
+  const where = page.slice(page.indexOf("where: function"),
+                           page.indexOf("size: function"));
+  check("the position boxes are not re-read on every keystroke",
+    where.indexOf("addEventListener(\"input\"") === -1);
+  check("they are re-read on paste and on leaving the box",
+    where.indexOf("addEventListener(\"paste\"") !== -1 &&
+    where.indexOf("addEventListener(\"change\"") !== -1);
+  // iOS shows no minus sign on a decimal keypad, and every longitude
+  // this project cares about needs one.
+  check("the longitude box does not ask for a keypad with no minus on it",
+    where.indexOf("inputMode") === -1);
 }
 
 // =====================================================================
